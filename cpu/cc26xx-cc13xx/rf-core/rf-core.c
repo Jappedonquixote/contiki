@@ -466,8 +466,11 @@ PROCESS_THREAD(rf_core_process, ev, data)
 
   PROCESS_BEGIN();
 
+  PRINTF("rf_core_process started\n");
+
   while(1) {
     PROCESS_YIELD_UNTIL(ev == PROCESS_EVENT_POLL);
+    PRINTF("rf_core_process event\n");
     do {
       watchdog_periodic();
       packetbuf_clear();
@@ -513,6 +516,8 @@ void
 cc26xx_rf_cpe0_isr(void)
 {
   ENERGEST_ON(ENERGEST_TYPE_IRQ);
+
+  PRINTF("rf-core_CPE0_isr\n");
 
   if(!rf_core_is_accessible()) {
     printf("RF ISR called but RF not ready... PANIC!!\n");

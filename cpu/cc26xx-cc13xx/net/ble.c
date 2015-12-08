@@ -13,6 +13,7 @@
 #include "rf-core/api/common_cmd.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
@@ -22,20 +23,38 @@
 #define PRINTF(...)
 #endif
 
-static unsigned char ble_params_buf[32];
+#define BLE_PARAMS_BUFFER_LENGTH 32
 
-int ble_nc_advertisement(void)
+static unsigned char ble_params_buf[BLE_PARAMS_BUFFER_LENGTH];
+
+int ble_send_command(rfc_bleRadioOp_t *cmd)
 {
 	uint32_t cmd_status;
+	if (rf_core_send_cmd((uint32_t) cmd, &cmd_status) == RF_CORE_CMD_ERROR) {
+		PRINTF("ble_send_advertisement: Chan=%d CMDSTA=0x%08lx, status=0x%04x\n",
+				cmd->channel, cmd_status, cmd->status);
+		return BLE_CMD_ERROR;
+	}
+
+	/* Wait until the command is done */
+	if (rf_core_wait_cmd_done(cmd) != RF_CORE_CMD_OK) {
+		PRINTF("ble_send_advertisement: Chan=%d CMDSTA=0x%08lx, status=0x%04x\n",
+				cmd->channel, cmd_status, cmd->status);
+		return BLE_CMD_ERROR;
+	}
+	return BLE_CMD_OK;
+}
+
+int ble_send_advertisement(int channel, char *payload, int payload_len)
+{
+
 	rfc_CMD_BLE_ADV_NC_t cmd;
 	rfc_bleAdvPar_t *params;
 
-	uint8_t channel = 37;
-	char name[] = "test payload - msp@7.12.15";
-	uint8_t *adv_payload = (uint8_t *) name;
-	uint8_t adv_payload_len = strlen(name);
-
-	PRINTF("ble_nc_advertisement called\n");
+	if(payload_len >= BLE_PARAMS_BUFFER_LENGTH || payload_len < 0) {
+		PRINTF("ble_send_advertisement: payload length invalid\n");
+		return BLE_CMD_ERROR;
+	}
 
 	params = (rfc_bleAdvPar_t *)ble_params_buf;
 
@@ -44,7 +63,8 @@ int ble_nc_advertisement(void)
 	memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
 
 	/* Adv NC */
-	cmd.commandNo = CMD_BLE_ADV_NC;
+//	cmd.commandNo = CMD_BLE_ADV_NC;
+	cmd.commandNo = CMD_BLE_ADV_SCAN;
 	cmd.condition.rule = COND_NEVER;
 	cmd.whitening.bOverride = 0;
 	cmd.whitening.init = 0;
@@ -58,23 +78,13 @@ int ble_nc_advertisement(void)
 
 	/* Set up BLE Advertisement parameters */
 	params = (rfc_bleAdvPar_t *) ble_params_buf;
-	params->advLen = adv_payload_len;
-	params->pAdvData = adv_payload;
+	params->advLen = payload_len;
+	params->pAdvData = (uint8_t *) payload;
 
-	if (rf_core_send_cmd((uint32_t) & cmd, &cmd_status) == RF_CORE_CMD_ERROR) {
-		PRINTF("send_ble_adv_nc: Chan=%d CMDSTA=0x%08lx, status=0x%04x\n",
-				channel, cmd_status, cmd.status);
-		return RF_CORE_CMD_ERROR;
+	int result = ble_send_command((rfc_bleRadioOp_t *) &cmd);
+
+	if(result == BLE_CMD_OK) {
+		PRINTF("ble_send_advertisement: successfully sent\n");
 	}
-
-	/* Wait until the command is done */
-	if (rf_core_wait_cmd_done(&cmd) != RF_CORE_CMD_OK) {
-		PRINTF("send_ble_adv_nc: Chan=%d CMDSTA=0x%08lx, status=0x%04x\n",
-				channel, cmd_status, cmd.status);
-		return RF_CORE_CMD_ERROR;
-	}
-
-	PRINTF("ble_nc_advertisement finished\n");
-
-	return RF_CORE_CMD_OK;
+	return result;
 }
