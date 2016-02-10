@@ -63,8 +63,8 @@ int ble_send_advertisement(int channel, char *payload, int payload_len)
 	memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
 
 	/* Adv NC */
-//	cmd.commandNo = CMD_BLE_ADV_NC;
-	cmd.commandNo = CMD_BLE_ADV_SCAN;
+	cmd.commandNo = CMD_BLE_ADV_NC;
+//	cmd.commandNo = CMD_BLE_ADV_SCAN;
 	cmd.condition.rule = COND_NEVER;
 	cmd.whitening.bOverride = 0;
 	cmd.whitening.init = 0;
