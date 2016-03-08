@@ -30,9 +30,9 @@
 /*---------------------------------------------------------------------------*/
 /**
  * \file
- * 		   A test for the Bluetooth Low-Energy radio of Contiki
+ * 		   A test for the Bluetooth Low-Energy radio of Contiki in scanning mode
  * \author
- *         Michael Spörk <m.spoerk@student.tugraz.at>
+ *         Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
 #include "contiki.h"
@@ -44,47 +44,32 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BLE_ADVERTISEMENT_TIMEOUT (CLOCK_CONF_SECOND * 10)
-#define BLE_ADVERTISEMENT_BUFFER_LENGTH 64
-#define BLE_ADVERTISEMENT_DEVICE_NAME "TI SensorTag"
+#define DEMO_INTERVAL   (10 * CLOCK_CONF_SECOND)
 
 static struct etimer timer;
-static char payload[BLE_ADVERTISEMENT_BUFFER_LENGTH];
-static int payload_len;
 
 /*---------------------------------------------------------------------------*/
-PROCESS(ble_test_process, "BLE advertising test process");
-AUTOSTART_PROCESSES(&ble_test_process);
+PROCESS(ble_scan_test_process, "BLE scanning test process");
+AUTOSTART_PROCESSES(&ble_scan_test_process);
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(ble_test_process, ev, data)
+PROCESS_THREAD(ble_scan_test_process, ev, data)
 {
-	int adv_channel;
+  int result;
+  int last_rssi;
 	PROCESS_BEGIN();
 
-	memset(payload, 0, BLE_ADVERTISEMENT_BUFFER_LENGTH);
-	payload[payload_len++] = 0x02;
-	payload[payload_len++] = 0x01;	// BLE device info
-	payload[payload_len++] = 0x1a;	// LE general discoverable + BR/EDR
-	payload[payload_len++] = 1 + strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
-	payload[payload_len++] = 0x09;	// BLE device name
-	memcpy(&payload[payload_len], BLE_ADVERTISEMENT_DEVICE_NAME, strlen(BLE_ADVERTISEMENT_DEVICE_NAME));
-	payload_len += strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
 
+	printf("BLE scanning test started\n");
+	leds_on(LEDS_GREEN);
+	leds_on(LEDS_RED);
 
-	printf("BLE test started\n");
-	leds_set(LEDS_GREEN);
+//	result =  ble_start_scanner(37);
+//	printf("start scanning result: %d\n", result);
 
     while(1) {
-    	etimer_set(&timer, BLE_ADVERTISEMENT_TIMEOUT);
-    	PROCESS_YIELD_UNTIL(etimer_expired(&timer));
-
-    	printf("advertising: %s / %d\n", payload, payload_len);
-
-        leds_on(LEDS_RED);
-        for(adv_channel = 37; adv_channel <= 39; ++adv_channel) {
-        	ble_send_advertisement(adv_channel, payload, payload_len);
-        }
-        leds_off(LEDS_RED);
+//        etimer_set(&timer, DEMO_INTERVAL);
+//        PROCESS_YIELD_UNTIL(etimer_expired(&timer));
+        PROCESS_YIELD();
     }
 
     PROCESS_END();
