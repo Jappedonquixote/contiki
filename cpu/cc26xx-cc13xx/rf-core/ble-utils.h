@@ -29,31 +29,27 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble.h
+ * ble-radio-interface.h
  *
- *  Created on: 07. Dez. 2015
- *      Author: Michael Spörk <m.spoerk@student.tugraz.at>
+ *  Created on: 09. März 2016
+ *      Author: Michael Spörk
  */
 
-#ifndef CPU_CC26XX_CC13XX_NET_BLE_H_
-#define CPU_CC26XX_CC13XX_NET_BLE_H_
+#ifndef CPU_CC26XX_CC13XX_RF_CORE_BLE_UTILS_H_
+#define CPU_CC26XX_CC13XX_RF_CORE_BLE_UTILS_H_
+/*---------------------------------------------------------------------------*/
+#include "contiki-conf.h"
 
-/* Used for return values for ble commands */
-#define BLE_CMD_OK 		1
-#define BLE_CMD_ERROR 	0
+/* Return values for BLE commands */
+#define BLE_CMD_OK    1
+#define BLE_CMD_ERROR   0
 
-/**
- * \brief Sends a single advertisement message.
- * \return BLE_CMD_OK or BLE_CMD_ERROR
- */
-int ble_send_advertisement(int channel, char *payload, int payload_len);
+uint8_t ble_utils_send_advertisement(int channel,
+           char *advertisement_data, int advertisement_data_len,
+           char *scan_response_data, int scan_response_data_len);
 
-/**
- * \brief Starts scanning state
- * \return BLE_CMD_OK or BLE_CMD_ERROR
- */
-int ble_start_scanner(int channel);
+void ble_utils_print_rx_data();
 
-int ble_get_last_rssi();
+void ble_utils_print_advertisement_output_data();
 
-#endif /* CPU_CC26XX_CC13XX_NET_BLE_H_ */
+#endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_UTILS_H_ */

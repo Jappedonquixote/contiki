@@ -39,18 +39,21 @@
 #include "sys/etimer.h"
 #include "dev/leds.h"
 #include "button-sensor.h"
-#include "net/ble.h"
+#include "rf-core/ble-utils.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #define BLE_ADVERTISEMENT_TIMEOUT (CLOCK_CONF_SECOND * 10)
-#define BLE_ADVERTISEMENT_BUFFER_LENGTH 64
+#define BLE_ADVERTISEMENT_BUFFER_LENGTH 31
+#define BLE_SCAN_RESPONSE_BUFFER_LENGTH 31
 #define BLE_ADVERTISEMENT_DEVICE_NAME "TI SensorTag"
 
 static struct etimer timer;
-static char payload[BLE_ADVERTISEMENT_BUFFER_LENGTH];
-static int payload_len;
+static char adv_data[BLE_ADVERTISEMENT_BUFFER_LENGTH];
+static int adv_data_len;
+static char scan_resp_data[BLE_SCAN_RESPONSE_BUFFER_LENGTH];
+static int scan_resp_data_len;
 
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_test_process, "BLE advertising test process");
@@ -61,30 +64,38 @@ PROCESS_THREAD(ble_test_process, ev, data)
 	int adv_channel;
 	PROCESS_BEGIN();
 
-	memset(payload, 0, BLE_ADVERTISEMENT_BUFFER_LENGTH);
-	payload[payload_len++] = 0x02;
-	payload[payload_len++] = 0x01;	// BLE device info
-	payload[payload_len++] = 0x1a;	// LE general discoverable + BR/EDR
-	payload[payload_len++] = 1 + strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
-	payload[payload_len++] = 0x09;	// BLE device name
-	memcpy(&payload[payload_len], BLE_ADVERTISEMENT_DEVICE_NAME, strlen(BLE_ADVERTISEMENT_DEVICE_NAME));
-	payload_len += strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+	/* initialize advertisement data */
+	memset(adv_data, 0, BLE_ADVERTISEMENT_BUFFER_LENGTH);
+	adv_data[adv_data_len++] = 0x02;
+	adv_data[adv_data_len++] = 0x01;	// BLE device info
+	adv_data[adv_data_len++] = 0x1a;	// LE general discoverable + BR/EDR
+	adv_data[adv_data_len++] = 1 + strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+	adv_data[adv_data_len++] = 0x09;	// BLE device name
+	memcpy(&adv_data[adv_data_len], BLE_ADVERTISEMENT_DEVICE_NAME,
+	       strlen(BLE_ADVERTISEMENT_DEVICE_NAME));
+	adv_data_len += strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
 
+	/* initialize scan response data */
+	memset(scan_resp_data, 0, BLE_SCAN_RESPONSE_BUFFER_LENGTH);
+	for(scan_resp_data_len = 0; scan_resp_data_len < 16; ++scan_resp_data_len){
+	    scan_resp_data[scan_resp_data_len] = scan_resp_data_len;
+	}
 
-	printf("BLE test started\n");
+	printf("BLE advertisement test\n");
 	leds_set(LEDS_GREEN);
 
     while(1) {
-    	etimer_set(&timer, BLE_ADVERTISEMENT_TIMEOUT);
-    	PROCESS_YIELD_UNTIL(etimer_expired(&timer));
-
-    	printf("advertising: %s / %d\n", payload, payload_len);
-
         leds_on(LEDS_RED);
         for(adv_channel = 37; adv_channel <= 39; ++adv_channel) {
-        	ble_send_advertisement(adv_channel, payload, payload_len);
+        	ble_utils_send_advertisement(adv_channel,
+        	                             adv_data, adv_data_len,
+        	                             scan_resp_data, scan_resp_data_len);
         }
         leds_off(LEDS_RED);
+
+        etimer_set(&timer, BLE_ADVERTISEMENT_TIMEOUT);
+        PROCESS_YIELD_UNTIL(etimer_expired(&timer));
+        ble_utils_print_advertisement_output_data();
     }
 
     PROCESS_END();
