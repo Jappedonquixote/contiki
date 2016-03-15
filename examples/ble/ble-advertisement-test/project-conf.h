@@ -10,8 +10,8 @@
 #define RF_CORE_CONF_CHANNEL                 25
 #define RF_BLE_CONF_ENABLED                   1
 #define BOARD_CONF_DEBUGGER_DEVPACK			  1
-#define NETSTACK_CONF_MAC				nullmac_driver
-#define NETSTACK_CONF_RDC				nullrdc_driver
+#define NETSTACK_CONF_MAC				ble_mac_driver
+#define NETSTACK_CONF_RDC				ble_rdc_driver
 /*---------------------------------------------------------------------------*/
 #endif /* PROJECT_CONF_H_ */
 /*---------------------------------------------------------------------------*/
