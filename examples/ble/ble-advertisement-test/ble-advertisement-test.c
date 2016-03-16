@@ -39,12 +39,12 @@
 #include "sys/etimer.h"
 #include "dev/leds.h"
 #include "button-sensor.h"
-#include "rf-core/ble-utils.h"
+#include "rf-core/ble-stack/ble-controller.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#define BLE_ADVERTISEMENT_TIMEOUT (CLOCK_CONF_SECOND * 10)
+#define BLE_TEST_INTERVAL (CLOCK_SECOND * 60)
 #define BLE_ADVERTISEMENT_BUFFER_LENGTH 31
 #define BLE_SCAN_RESPONSE_BUFFER_LENGTH 31
 #define BLE_ADVERTISEMENT_DEVICE_NAME "TI SensorTag"
@@ -61,7 +61,6 @@ AUTOSTART_PROCESSES(&ble_test_process);
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_test_process, ev, data)
 {
-	int adv_channel;
 	PROCESS_BEGIN();
 
 	/* initialize advertisement data */
@@ -84,18 +83,19 @@ PROCESS_THREAD(ble_test_process, ev, data)
 	printf("BLE advertisement test\n");
 	leds_set(LEDS_GREEN);
 
-    while(1) {
-        leds_on(LEDS_RED);
-        for(adv_channel = 37; adv_channel <= 39; ++adv_channel) {
-        	ble_utils_send_advertisement(adv_channel,
-        	                             adv_data, adv_data_len,
-        	                             scan_resp_data, scan_resp_data_len);
-        }
-        leds_off(LEDS_RED);
+	ble_controller_set_advertising_parameters((CLOCK_SECOND * 1), 0b0111);
+	ble_controller_set_advertising_data(adv_data_len, adv_data);
+	ble_controller_set_scan_response_data(scan_resp_data_len, scan_resp_data);
 
-        etimer_set(&timer, BLE_ADVERTISEMENT_TIMEOUT);
+    while(1) {
+        ble_controller_enable_advertising();
+        printf("test: advertising started\n");
+        etimer_set(&timer, BLE_TEST_INTERVAL);
         PROCESS_YIELD_UNTIL(etimer_expired(&timer));
-        ble_utils_print_advertisement_output_data();
+        ble_controller_disable_advertising();
+        printf("test: advertising stopped\n");
+        etimer_set(&timer, BLE_TEST_INTERVAL);
+        PROCESS_YIELD_UNTIL(etimer_expired(&timer));
     }
 
     PROCESS_END();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Michael Spörk
+ * Copyright (c) 2016, Michael Spoerk
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,7 @@
 /*
  * ble-rdc.c
  *
- *  Created on: 10. März 2016
- *      Author: Michael Spörk
+ *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
 #include "net/ble-rdc.h"
