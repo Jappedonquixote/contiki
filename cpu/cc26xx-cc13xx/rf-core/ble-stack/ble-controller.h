@@ -55,6 +55,37 @@
 #define BLE_ADV_DATA_LENGHT_MAX         31
 #define BLE_SCAN_RESP_DATA_LENGHT_MAX   31
 
+#define BLE_SCAN_INTERVAL_MIN           ( 1 * CLOCK_SECOND)
+#define BLE_SCAN_INTERVAL_MAX           (10 * CLOCK_SECOND)
+#define BLE_SCAN_WINDOW_MIN             ( 1 * CLOCK_SECOND)
+#define BLE_SCAN_WINDOW_MAX             (10 * CLOCK_SECOND)
+
+#define BLE_PARAMS_BUFFER_LENGTH  32
+#define BLE_RECEIVE_BUFFER_LENGTH 128
+#define BLE_OUTPUT_BUFFER_LENGTH  32
+
+/*---------------------------------------------------------------------------*/
+/* controller states */
+typedef enum {
+    /* controller is in standby */
+    BLE_STANDBY,
+
+    /* controller is advertising */
+    BLE_ADVERTISING,
+
+    /* controller is scanning */
+    BLE_SCANNING,
+
+    /* controller tries to initiate a connection */
+    BLE_INITIATING,
+
+    /* controller is connected to another ble device */
+    BLE_CONNECTION
+} ble_controller_state_t;
+
+
+/*---------------------------------------------------------------------------*/
+/* general functions */
 unsigned short ble_controller_is_enabled();
 
 unsigned short ble_controller_reset();
@@ -63,6 +94,10 @@ unsigned short ble_controller_enable();
 
 unsigned short ble_controller_disable();
 
+ble_controller_state_t ble_controller_state();
+
+/*---------------------------------------------------------------------------*/
+/* advertising functions */
 unsigned short ble_controller_set_advertising_parameters(
         unsigned int advertising_interval, char advertising_channel_map);
 
@@ -76,4 +111,18 @@ unsigned short ble_controller_enable_advertising();
 
 unsigned short ble_controller_disable_advertising();
 
+/*---------------------------------------------------------------------------*/
+/* scanning functions */
+unsigned short ble_controller_set_scan_parameters(
+        unsigned int scanning_interval, unsigned int scanning_window,
+        unsigned short scanning_channel);
+
+unsigned short ble_controller_set_scan_enable();
+
+/*---------------------------------------------------------------------------*/
+/* receive buffer functions */
+unsigned short ble_controller_read_current_rx_buf(
+        void *buffer, unsigned short buffer_length);
+unsigned short ble_controller_read_current_rssi();
+void ble_controller_free_current_rx_buf();
 #endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_STACK_BLE_CONTROLLER_H_ */

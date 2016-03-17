@@ -67,8 +67,20 @@ static void send_list(mac_callback_t sent_callback, void *ptr, struct rdc_buf_li
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
+    int i;
+    char *buffer = packetbuf_dataptr();
     PRINTF("[ ble-rdc ] input()\n");
-    NETSTACK_MAC.input();
+    for(i = 0; i < packetbuf_datalen(); ++i)
+    {
+        if((i % 8 == 0) && i != 0)
+        {
+            PRINTF("   ");
+        }
+        PRINTF("%02X ", buffer[i]);
+    }
+    PRINTF("\n");
+
+//    NETSTACK_MAC.input();
 }
 
 /*---------------------------------------------------------------------------*/

@@ -45,6 +45,7 @@
 #include <string.h>
 
 #define BLE_TEST_INTERVAL (CLOCK_SECOND * 60)
+#define BLE_PAUSE_INTERVAL  (CLOCK_SECOND * 1)
 #define BLE_ADVERTISEMENT_BUFFER_LENGTH 31
 #define BLE_SCAN_RESPONSE_BUFFER_LENGTH 31
 #define BLE_ADVERTISEMENT_DEVICE_NAME "TI SensorTag"
@@ -94,7 +95,7 @@ PROCESS_THREAD(ble_test_process, ev, data)
         PROCESS_YIELD_UNTIL(etimer_expired(&timer));
         ble_controller_disable_advertising();
         printf("test: advertising stopped\n");
-        etimer_set(&timer, BLE_TEST_INTERVAL);
+        etimer_set(&timer, BLE_PAUSE_INTERVAL);
         PROCESS_YIELD_UNTIL(etimer_expired(&timer));
     }
 

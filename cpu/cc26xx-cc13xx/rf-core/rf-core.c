@@ -462,16 +462,14 @@ PROCESS_THREAD(rf_core_process, ev, data)
   int len;
 
   PROCESS_BEGIN();
-
-  PRINTF("rf_core_process started\n");
-
   while(1) {
     PROCESS_YIELD_UNTIL(ev == PROCESS_EVENT_POLL);
-    PRINTF("rf_core_process event\n");
+    PRINTF("rf_core_process woken up\n");
     do {
       watchdog_periodic();
       packetbuf_clear();
       len = NETSTACK_RADIO.read(packetbuf_dataptr(), PACKETBUF_SIZE);
+      PRINTF("rf-core-process: read %d bytes\n", len);
 
       if(len > 0) {
         packetbuf_set_datalen(len);
@@ -487,16 +485,12 @@ static void
 rx_nok_isr(void)
 {
   RIMESTATS_ADD(badcrc);
-  PRINTF("RF: Bad CRC\n");
 }
 /*---------------------------------------------------------------------------*/
 void
 cc26xx_rf_cpe1_isr(void)
 {
   ENERGEST_ON(ENERGEST_TYPE_IRQ);
-
-  PRINTF("RF Error\n");
-
   if(!rf_core_is_accessible()) {
     if(rf_core_power_up() != RF_CORE_CMD_OK) {
       return;
@@ -513,8 +507,6 @@ void
 cc26xx_rf_cpe0_isr(void)
 {
   ENERGEST_ON(ENERGEST_TYPE_IRQ);
-
-  PRINTF("rf-core_CPE0_isr\n");
 
   if(!rf_core_is_accessible()) {
     printf("RF ISR called but RF not ready... PANIC!!\n");

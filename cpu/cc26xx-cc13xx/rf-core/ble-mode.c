@@ -26,7 +26,6 @@
 /*---------------------------------------------------------------------------*/
 static int on(void);
 static int off(void);
-
 /*---------------------------------------------------------------------------*/
 static uint8_t
 request(void)
@@ -85,8 +84,15 @@ send(const void *payload, unsigned short payload_len)
 static int
 radio_read(void *buf, unsigned short buf_len)
 {
-	PRINTF("ble-mode radio_read\n");
-	return 0;
+    int len = 0;
+    PRINTF("ble-mode radio_read\n");
+    len = ble_controller_read_current_rx_buf(buf, buf_len);
+//    PRINTF("ble-mode radio read() read %d bytes\n", len);
+    if(len > 0)
+    {
+        ble_controller_free_current_rx_buf();
+    }
+	return len;
 }
 /*---------------------------------------------------------------------------*/
 static int

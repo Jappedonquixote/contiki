@@ -39,12 +39,16 @@
 #include "sys/etimer.h"
 #include "dev/leds.h"
 #include "button-sensor.h"
-#include "net/ble.h"
+
+#include "rf-core/ble-stack/ble-controller.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#define DEMO_INTERVAL   (10 * CLOCK_CONF_SECOND)
+#define DEMO_INTERVAL   (10 * CLOCK_SECOND)
+
+#define SCAN_INTERVAL   (10 * CLOCK_SECOND)
+#define SCAN_WINDOW     ( 9 * CLOCK_SECOND)
 
 static struct etimer timer;
 
@@ -54,22 +58,20 @@ AUTOSTART_PROCESSES(&ble_scan_test_process);
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_scan_test_process, ev, data)
 {
-  int result;
-  int last_rssi;
-	PROCESS_BEGIN();
+    int result;
+    PROCESS_BEGIN();
 
 
-	printf("BLE scanning test started\n");
-	leds_on(LEDS_GREEN);
-	leds_on(LEDS_RED);
+    printf("BLE scanning test started\n");
+    leds_on(LEDS_GREEN);
 
-//	result =  ble_start_scanner(37);
-//	printf("start scanning result: %d\n", result);
+    result = ble_controller_set_scan_parameters(SCAN_INTERVAL, SCAN_WINDOW, 37);
 
     while(1) {
-//        etimer_set(&timer, DEMO_INTERVAL);
-//        PROCESS_YIELD_UNTIL(etimer_expired(&timer));
-        PROCESS_YIELD();
+        printf("BLE scanning: while loop\n");
+        ble_controller_set_scan_enable();
+        etimer_set(&timer, DEMO_INTERVAL);
+        PROCESS_YIELD_UNTIL(etimer_expired(&timer));
     }
 
     PROCESS_END();

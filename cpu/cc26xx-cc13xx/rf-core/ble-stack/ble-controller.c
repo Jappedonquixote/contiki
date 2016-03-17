@@ -38,6 +38,7 @@
 
 #include "sys/process.h"
 #include "sys/etimer.h"
+#include "sys/rtimer.h"
 
 #include "dev/oscillators.h"
 
@@ -83,6 +84,8 @@ static uint32_t ble_overrides[] = {
   0xFFFFFFFF, /* End of override list */
 };
 /*---------------------------------------------------------------------------*/
+static ble_controller_state_t state = BLE_STANDBY;
+/*---------------------------------------------------------------------------*/
 /* advertising parameters */
 /* use 10 seconds as default for the advertising interval */
 static unsigned int adv_interval = (CLOCK_SECOND * 10);
@@ -98,17 +101,25 @@ static char* scan_resp_data = NULL;
 static short advertise = 0;
 static struct etimer adv_timer;
 /*---------------------------------------------------------------------------*/
-/* buffers for interacting with the radio controller */
-#define BLE_PARAMS_BUFFER_LENGTH  32
-#define BLE_RECEIVE_BUFFER_LENGTH 48
-#define BLE_OUTPUT_BUFFER_LENGTH  16
+/* scanning parameters */
+/* use 10 seconds as default for the scanning interval */
+static unsigned int scan_interval = (CLOCK_SECOND * 10);
+static unsigned int scan_window = (CLOCK_SECOND * 5);
+static unsigned short scan_channel = BLE_ADV_CHANNEL_1;
 
+/*---------------------------------------------------------------------------*/
+/* buffers for interacting with the radio controller */
 static uint8_t ble_params_buf[BLE_PARAMS_BUFFER_LENGTH] CC_ALIGN(4);
-static uint8_t ble_receive_buf[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
 static uint8_t ble_output_buf[BLE_OUTPUT_BUFFER_LENGTH] CC_ALIGN(4);
+static uint8_t ble_rx_buf_0[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
+static uint8_t ble_rx_buf_1[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
+static uint8_t ble_rx_buf_2[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
+static uint8_t ble_rx_buf_3[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
 
 /* The RX Data Queue */
 static dataQueue_t rx_data_queue = { 0 };
+/* Receive entry pointer to keep track of read items */
+volatile static uint8_t *current_rx_entry;
 /*---------------------------------------------------------------------------*/
 void print_command_status(uint32_t cmd_status, uint16_t status_field)
 {
@@ -193,6 +204,11 @@ unsigned short setup_ble_mode()
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_controller_process, "Bluetooth Low Energy controller");
 /*---------------------------------------------------------------------------*/
+ble_controller_state_t ble_controller_state()
+{
+    return state;
+}
+/*---------------------------------------------------------------------------*/
 unsigned short ble_controller_is_enabled()
 {
     return rf_core_is_accessible();
@@ -208,9 +224,49 @@ unsigned short ble_controller_reset()
 }
 
 /*---------------------------------------------------------------------------*/
+void setup_buffers(void)
+{
+    /* clear all buffers */
+    memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
+    memset(ble_rx_buf_0, 0x00, sizeof(ble_rx_buf_0));
+    memset(ble_rx_buf_1, 0x00, sizeof(ble_rx_buf_1));
+    memset(ble_rx_buf_2, 0x00, sizeof(ble_rx_buf_2));
+    memset(ble_rx_buf_3, 0x00, sizeof(ble_rx_buf_3));
+    memset(ble_output_buf, 0x00, sizeof(ble_output_buf));
+
+    /* setup circular receive buffer queue (last entry = NULL) */
+    rx_data_queue.pCurrEntry = ble_rx_buf_0;
+    rx_data_queue.pLastEntry = NULL;
+    current_rx_entry = ble_rx_buf_0;
+
+    rfc_dataEntry_t *entry;
+    entry = (rfc_dataEntry_t *)ble_rx_buf_0;
+    entry->pNextEntry = ble_rx_buf_1;
+    entry->config.lenSz = 1;
+    entry->length = sizeof(ble_rx_buf_0) - 8;
+
+    entry = (rfc_dataEntry_t *)ble_rx_buf_1;
+    entry->pNextEntry = ble_rx_buf_2;
+    entry->config.lenSz = 1;
+    entry->length = sizeof(ble_rx_buf_1) - 8;
+
+    entry = (rfc_dataEntry_t *)ble_rx_buf_2;
+    entry->pNextEntry = ble_rx_buf_3;
+    entry->config.lenSz = 1;
+    entry->length = sizeof(ble_rx_buf_2) - 8;
+
+    entry = (rfc_dataEntry_t *)ble_rx_buf_3;
+    entry->pNextEntry = ble_rx_buf_0;
+    entry->config.lenSz = 1;
+    entry->length = sizeof(ble_rx_buf_3) - 8;
+}
+
+/*---------------------------------------------------------------------------*/
 unsigned short ble_controller_enable()
 {
     PRINTF("ble_controller_enable()\n");
+
+    setup_buffers();
 
     oscillators_request_hf_xosc();
 
@@ -310,7 +366,6 @@ unsigned short send_advertisement(unsigned short channel)
     /* clear all used buffers */
     memset(&cmd, 0x00, sizeof(cmd));
     memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
-    memset(ble_receive_buf, 0x00, sizeof(ble_receive_buf));
 
     /* construct the command */
     cmd.commandNo = CMD_BLE_ADV;
@@ -320,14 +375,6 @@ unsigned short send_advertisement(unsigned short channel)
     cmd.pParams = params;
     cmd.startTrigger.triggerType = TRIG_NOW;
     cmd.pOutput = output;
-
-    /* init the receive buffer */
-    rfc_dataEntry_t *entry = (rfc_dataEntry_t *) ble_receive_buf;
-    entry->pNextEntry = NULL;
-    entry->config.lenSz = 1;
-    entry->length = sizeof(ble_receive_buf) - 8;
-    rx_data_queue.pCurrEntry = ble_receive_buf;
-    rx_data_queue.pLastEntry = ble_receive_buf;
 
     /* construct the command parameters */
     params->pRxQ = &rx_data_queue;
@@ -343,20 +390,20 @@ unsigned short send_advertisement(unsigned short channel)
 
     /* Send Radio setup to RF Core */
     if(rf_core_send_cmd((uint32_t)&cmd, &cmd_status) != RF_CORE_CMD_OK) {
-        PRINTF("setup_ble_mode() send: ");
+        PRINTF("send_advertisement() send: ");
         print_command_status(cmd_status, cmd.status);
         return BLE_COMMAND_ERROR;
     }
 
-//    /* Wait until radio setup is done */
-//    if(rf_core_wait_cmd_done(&cmd) != RF_CORE_CMD_OK) {
-//        PRINTF("setup_ble_mode() wait: ");
-//        print_command_status(cmd_status, cmd.status);
-//        return BLE_COMMAND_ERROR;
-//    }
+    /* Wait until radio setup is done */
+    if(rf_core_wait_cmd_done(&cmd) != RF_CORE_CMD_OK) {
+        PRINTF("send_advertisement() wait: ");
+        print_command_status(cmd_status, cmd.status);
+        return BLE_COMMAND_ERROR;
+    }
 
-    PRINTF("send_advertisement() channel %d: ", channel);
-    print_command_status(cmd_status, cmd.status);
+//    PRINTF("send_advertisement() channel %d: ", channel);
+//    print_command_status(cmd_status, cmd.status);
 
     return result;
 }
@@ -393,6 +440,166 @@ void print_advertisement_output_data()
     PRINTF("lastRssi:   %d\n", output->lastRssi);
     PRINTF("timeStamp:  %lu\n", output->timeStamp);
 }
+
+
+/*---------------------------------------------------------------------------*/
+unsigned short ble_controller_set_scan_parameters(
+        unsigned int scanning_interval, unsigned int scanning_window,
+        unsigned short scanning_channel)
+{
+    if((scanning_interval < BLE_SCAN_INTERVAL_MIN) ||
+       (scanning_interval > BLE_SCAN_INTERVAL_MAX))
+    {
+        PRINTF("ble_controller_set_scan_parameters(): invalid scanning interval\n");
+        return BLE_COMMAND_ERROR;
+    }
+    if((scanning_window < BLE_SCAN_WINDOW_MIN) ||
+       (scanning_window > BLE_SCAN_WINDOW_MAX) ||
+       (scanning_window > scanning_interval))
+    {
+        PRINTF("ble_controller_set_scan_parameters() invalid scanning window\n");
+        return BLE_COMMAND_ERROR;
+    }
+    if((scanning_channel < BLE_ADV_CHANNEL_1) ||
+       (scanning_channel > BLE_ADV_CHANNEL_3))
+    {
+        PRINTF("ble_controller_set_scan_parameters() invalid scanning channel\n");
+        return BLE_COMMAND_ERROR;
+    }
+    scan_interval = scanning_interval;
+    scan_window = scanning_window;
+    scan_channel = scanning_channel;
+    return BLE_COMMAND_SUCCESS;
+}
+
+unsigned short send_scan_start()
+{
+    char result;
+    uint32_t timeout_time;
+    uint32_t cmd_status;
+    rfc_CMD_BLE_SCANNER_t cmd;
+    rfc_bleScannerPar_t *params;
+    rfc_bleScannerOutput_t *output;
+
+    params = (rfc_bleScannerPar_t *) ble_params_buf;
+    output = (rfc_bleScannerOutput_t *) ble_output_buf;
+
+    /* clear all used buffers */
+    memset(&cmd, 0x00, sizeof(cmd));
+    memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
+
+    /* convert timeout time*/
+    timeout_time = RTIMER_SECOND * 100;
+    // TODO change to configured scan window
+//    timeout_time = RTIMER_SECOND * ((uint16_t)(scan_window / CLOCK_SECOND));
+    PRINTF("send_scan_start() timeout_time: %lu\n", timeout_time);
+
+    /* maybe reset the current_rx_entry each time scanning is started */
+    current_rx_entry = ble_rx_buf_0;
+
+    /* construct the command */
+    cmd.commandNo = CMD_BLE_SCANNER;
+    cmd.condition.rule = COND_NEVER;
+    cmd.whitening.bOverride = 0;
+    cmd.channel = scan_channel;
+    cmd.pParams = params;
+    cmd.startTrigger.triggerType = TRIG_NOW;
+    cmd.pOutput = output;
+
+    /* construct the command parameters */
+    params->pRxQ = &rx_data_queue;
+    params->scanConfig.scanFilterPolicy = 0;
+    params->scanConfig.bActiveScan = 1;
+    params->scanConfig.deviceAddrType = 0;
+    params->scanConfig.bStrictLenFilter = 0;
+    params->scanConfig.bAutoWlIgnore = 0;
+    params->scanConfig.bEndOnRpt = 1;
+    params->scanReqLen = 0;
+    params->pScanReqData = NULL;
+    params->pDeviceAddress = (uint16_t *) &linkaddr_node_addr.u8[LINKADDR_SIZE - 2];
+    params->timeoutTrigger.triggerType = TRIG_REL_START;
+    params->timeoutTime = timeout_time;
+    params->endTrigger.triggerType = TRIG_NEVER;
+
+    /* Send Radio setup to RF Core */
+    if(rf_core_send_cmd((uint32_t)&cmd, &cmd_status) != RF_CORE_CMD_OK) {
+        PRINTF("send_scan_start() send: ");
+        print_command_status(cmd_status, cmd.status);
+        return BLE_COMMAND_ERROR;
+    }
+
+    /* Wait until radio setup is done */
+    result = rf_core_wait_cmd_done(&cmd);
+    if((result != RF_CORE_CMD_OK) && (cmd.status != RF_CORE_RADIO_OP_STATUS_ACTIVE)) {
+        PRINTF("send_advertisement() wait: ");
+        print_command_status(cmd_status, cmd.status);
+        return BLE_COMMAND_ERROR;
+    }
+//
+//    PRINTF("send_scan_start() channel %d: ", scan_channel);
+//    print_command_status(cmd_status, cmd.status);
+
+    return result;
+}
+
+/*---------------------------------------------------------------------------*/
+void print_scanning_output_data()
+{
+    rfc_bleScannerOutput_t *output = (rfc_bleScannerOutput_t *) ble_output_buf;
+
+    PRINTF("scanning output data:\n");
+    PRINTF("nTxScanReq: %d\n", output->nTxScanReq);
+    PRINTF("nBackedOff: %d\n", output->nBackedOffScanReq);
+    PRINTF("nRxAdvOk:   %d\n", output->nRxAdvOk);
+    PRINTF("nRxAdvIgn:  %d\n", output->nRxAdvIgnored);
+    PRINTF("nRxAdvNok:  %d\n", output->nRxAdvNok);
+    PRINTF("nRxSRspOK:  %d\n", output->nRxScanRspOk);
+    PRINTF("nRxSRspIgn: %d\n", output->nRxScanRspIgnored);
+    PRINTF("nRxSRspNok: %d\n", output->nRxScanRspNok);
+    PRINTF("nRxAdvFull: %d\n", output->nRxAdvBufFull);
+    PRINTF("nRxSRpFull: %d\n", output->nRxScanRspBufFull);
+    PRINTF("lastRssi:   %d\n", output->lastRssi);
+    PRINTF("timeStamp:  %lu\n", output->timeStamp);
+}
+
+/*---------------------------------------------------------------------------*/
+unsigned short ble_controller_set_scan_enable()
+{
+    send_scan_start();
+//    print_scanning_output_data();
+    return BLE_COMMAND_SUCCESS;
+}
+
+/*---------------------------------------------------------------------------*/
+unsigned short ble_controller_read_current_rx_buf(
+        void *buffer, unsigned short buffer_length)
+{
+    int len = 0;
+    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
+
+    if(entry->status != DATA_ENTRY_FINISHED)
+    {
+        return 0;
+    }
+
+    len = current_rx_entry[8];
+    memcpy(buffer, (char *)&current_rx_entry[9], len);
+    return len;
+}
+
+/*---------------------------------------------------------------------------*/
+void ble_controller_free_current_rx_buf()
+{
+    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *)current_rx_entry;
+
+    /* clear the length*/
+    current_rx_entry[8] = 0;
+
+    /* set status to pending */
+    entry->status = DATA_ENTRY_PENDING;
+    current_rx_entry = entry->pNextEntry;
+}
+
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_controller_process, ev, data)
 {
