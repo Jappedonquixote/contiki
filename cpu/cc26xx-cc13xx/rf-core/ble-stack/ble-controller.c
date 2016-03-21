@@ -42,13 +42,12 @@
 
 #include "dev/oscillators.h"
 
-#include "net/linkaddr.h"
-
 #include "rf-core/api/common_cmd.h"
 #include "rf-core/api/data_entry.h"
 #include "rf-core/api/mailbox.h"
 #include "rf-core/api/ble_cmd.h"
 #include "rf-core/api/common_cmd.h"
+#include "rf-core/ble-stack/ble-addr.h"
 #include "rf-core/ble-stack/ble-controller.h"
 #include "rf-core/rf-core.h"
 
@@ -385,7 +384,7 @@ unsigned short send_advertisement(unsigned short channel)
     params->scanRspLen = scan_resp_data_len;
     params->pAdvData = (uint8_t *) adv_data;
     params->pScanRspData = (uint8_t *) scan_resp_data;
-    params->pDeviceAddress = (uint16_t *) &linkaddr_node_addr.u8[LINKADDR_SIZE - 2];
+    params->pDeviceAddress = (uint16_t *) ble_addr;
     params->endTrigger.triggerType = TRIG_NEVER;
 
     /* Send Radio setup to RF Core */
@@ -516,7 +515,7 @@ unsigned short send_scan_start()
     params->scanConfig.bEndOnRpt = 1;
     params->scanReqLen = 0;
     params->pScanReqData = NULL;
-    params->pDeviceAddress = (uint16_t *) &linkaddr_node_addr.u8[LINKADDR_SIZE - 2];
+    params->pDeviceAddress = (uint16_t *) ble_addr;
     params->timeoutTrigger.triggerType = TRIG_REL_START;
     params->timeoutTime = timeout_time;
     params->endTrigger.triggerType = TRIG_NEVER;

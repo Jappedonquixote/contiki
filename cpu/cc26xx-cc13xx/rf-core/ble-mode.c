@@ -8,6 +8,7 @@
 #include "contiki.h"
 #include "dev/radio.h"
 #include "lpm.h"
+#include "rf-core/ble-stack/ble-addr.h"
 #include "rf-core/ble-stack/ble-controller.h"
 /*---------------------------------------------------------------------------*/
 #ifdef __GNUC__
@@ -45,6 +46,8 @@ init(void)
 {
     int result;
 	PRINTF("[ ble-phy ] init()\n");
+
+	ble_addr_init();
 
 	lpm_register_module(&cc26xx_rf_lpm_module);
 
