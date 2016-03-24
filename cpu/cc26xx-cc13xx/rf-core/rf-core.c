@@ -82,6 +82,8 @@
 /*---------------------------------------------------------------------------*/
 /* RF interrupts */
 #define RX_FRAME_IRQ IRQ_RX_ENTRY_DONE
+//#define RX_FRAME_IRQ (IRQ_RX_ENTRY_DONE | IRQ_RX_OK | IRQ_RX_NOK | IRQ_RX_IGNORED | IRQ_RX_EMPTY | IRQ_RX_CTRL | IRQ_RX_CTRL_ACK)
+//#define RX_FRAME_IRQ (IRQ_RX_ENTRY_DONE | IRQ_RX_CTRL | IRQ_RX_CTRL_ACK)
 #define ERROR_IRQ    IRQ_INTERNAL_ERROR
 #define RX_NOK_IRQ   IRQ_RX_NOK
 
@@ -102,6 +104,8 @@ static rfc_radioOp_t *last_radio_op = NULL;
 static const rf_core_primary_mode_t *primary_mode = NULL;
 /*---------------------------------------------------------------------------*/
 PROCESS(rf_core_process, "CC13xx / CC26xx RF driver");
+
+process_event_t rf_core_event;
 /*---------------------------------------------------------------------------*/
 #define RF_CORE_CLOCKS_MASK (RFC_PWR_PWMCLKEN_RFC_M | RFC_PWR_PWMCLKEN_CPE_M \
                              | RFC_PWR_PWMCLKEN_CPERAM_M)
@@ -463,13 +467,12 @@ PROCESS_THREAD(rf_core_process, ev, data)
 
   PROCESS_BEGIN();
   while(1) {
-    PROCESS_YIELD_UNTIL(ev == PROCESS_EVENT_POLL);
-    PRINTF("rf_core_process woken up\n");
+    PROCESS_YIELD_UNTIL(ev == rf_core_event);
+    PRINTF("rf_core_event received\n");
     do {
       watchdog_periodic();
       packetbuf_clear();
       len = NETSTACK_RADIO.read(packetbuf_dataptr(), PACKETBUF_SIZE);
-      PRINTF("rf-core-process: read %d bytes\n", len);
 
       if(len > 0) {
         packetbuf_set_datalen(len);
@@ -517,11 +520,10 @@ cc26xx_rf_cpe0_isr(void)
   }
 
   ti_lib_int_master_disable();
-
   if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) & RX_FRAME_IRQ) {
-    /* Clear the RX_ENTRY_DONE interrupt flag */
-    HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFF7FFFFF;
-    process_poll(&rf_core_process);
+      /* Clear the RX_ENTRY_DONE interrupt flag */
+      HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFF7FFFFF;
+      process_post(PROCESS_BROADCAST, rf_core_event, NULL);
   }
 
   if(RF_CORE_DEBUG_CRC) {

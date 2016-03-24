@@ -228,8 +228,13 @@ typedef struct rf_core_primary_mode_s {
 #define RF_CORE_COMMAND_PROTOCOL_IEEE                    0x2000
 #define RF_CORE_COMMAND_PROTOCOL_PROP                    0x3000
 /*---------------------------------------------------------------------------*/
+#define RF_CORE_EVENT_RX                                 0x1000
+#define RF_CORE_EVENT_RX_CONN_REQUEST                    0x1001
+/*---------------------------------------------------------------------------*/
 /* Make the main driver process visible to mode drivers */
 PROCESS_NAME(rf_core_process);
+/*---------------------------------------------------------------------------*/
+extern process_event_t rf_core_event;
 /*---------------------------------------------------------------------------*/
 /**
  * \brief Check whether the RF core is accessible

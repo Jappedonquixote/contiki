@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Michael Spörk
+ * Copyright (c) 2016, Michael Spoerk
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,42 +29,60 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-rdc.h
+ * frame-ble.c
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef BLE_RDC_H_
-#define BLE_RDC_H_
-
-#include "contiki.h"
+#include "net/frame-ble.h"
 
 /*---------------------------------------------------------------------------*/
-/* advertising parameters */
-#define BLE_ADV_INTERVAL_MIN                ( 0.020 * CLOCK_SECOND)
-#define BLE_ADV_INTERVAL_MAX                (10.240 * CLOCK_SECOND)
-/* use maximum advertising interval as default to preserve battery */
-#define BLE_ADV_INTERVAL                    (BLE_ADV_INTERVAL_MIN * 100)
+#define DEBUG 1
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+/*---------------------------------------------------------------------------*/
+void print_frame(frame_ble_t *frame){
+    int i, length = 0;
+    frame_ble_type_t type = frame->frame_type;
+
+    if(type == FRAME_BLE_TYPE_ADV_PDU)
+    {
+        length = frame->hdr.hdr_adv.length;
+        PRINTF("ADV_PDU:\n");
+        PRINTF("PDU type:       %d\n", frame->hdr.hdr_adv.pdu_type);
+        PRINTF("TxAdd:          %d\n", frame->hdr.hdr_adv.tx_add);
+        PRINTF("RxAdd:          %d\n", frame->hdr.hdr_adv.rx_add);
+        PRINTF("length:         %d\n", frame->hdr.hdr_adv.length);
+    }
+
+    PRINTF("payload:        ");
+    for(i = 0; i < length; ++i)
+    {
+        PRINTF("0x%02X ", frame->payload[i]);
+    }
+    PRINTF("\n");
+}
 
 /*---------------------------------------------------------------------------*/
-/* connection parameters */
-#define BLE_CONN_SUPERVISION_INTERVAL_MIN   ( 0.100 * CLOCK_SECOND)
-#define BLE_CONN_SUPERVISION_INTERVAL_MAX   (32.000 * CLOCK_SECOND)
-/* use maximum supervision interval as default to preserve battery */
-#define BLE_CONN_SUPERVISION_INTERVAL       BLE_CONN_SUPERVISION_INTERVAL_MAX
+/*
+ * Parses incoming data to a ble frame.
+ */
+int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
+{
+    // TODO implement check for PDU type
+    frame->frame_type = FRAME_BLE_TYPE_ADV_PDU;
+    frame->hdr.hdr_adv.pdu_type = data[0] & 0x0F;
+    frame->hdr.hdr_adv.tx_add = (data[0] & 0x40) >> 6;
+    frame->hdr.hdr_adv.rx_add = (data[0] & 0x80) >> 7;
+    frame->hdr.hdr_adv.length = data[1];
+    frame->payload = &data[2];
 
-#define BLE_CONN_INTERVAL_MIN               0x0006      /* 7.5 milliseconds*/
-#define BLE_CONN_INTERVAL_MAX               0x0C80      /* 4 seconds */
-/* choose the slave connection interval within the defined bounds */
-//#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0960      /* 3 seconds */
-#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0006
-#define BLE_SLAVE_CONN_INTERVAL_MAX         0x0C80      /* 4 seconds */
-
-#define BLE_CONN_SLAVE_LATENCY_MIN          0
-#define BLE_CONN_SLAVE_LATENCY_MAX          (BLE_CONN_SUPERVISION_INTERVAL/BLE_CONN_INTERVAL - 1)
-/* use maximum slave latency as default to preserve battery */
-#define BLE_CONN_SLAVE_LATENCY              BLE_CONN_SLAVE_LATENCY_MAX
-
-
-
-#endif /* BLE_RDC_H_ */
+#ifdef DEBUG
+    print_frame(frame);
+#endif
+    return 2;       // header length is 2 bytes
+}

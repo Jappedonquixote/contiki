@@ -36,14 +36,18 @@
 
 
 #include "rf-core/ble-stack/ble-addr.h"
+#include "net/linkaddr.h"
+
 #include <string.h>
 
-unsigned char ble_addr[BLE_ADDR_SIZE];
 
+ble_addr_t ble_node_addr;
+
+/*---------------------------------------------------------------------------*/
 void ble_addr_init()
 {
     int i;
     for(i = 0; i < BLE_ADDR_SIZE; ++i) {
-        ble_addr[i] = ((uint8_t *)BLE_ADDR_LOCATION_PRIMARY)[i];
+        ble_node_addr.addr[i] = ((uint8_t *)BLE_ADDR_LOCATION_PRIMARY)[i];
     }
 }

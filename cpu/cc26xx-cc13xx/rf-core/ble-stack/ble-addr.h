@@ -43,7 +43,11 @@
 
 #define BLE_ADDR_LOCATION_PRIMARY   0x500012E8 /**< Primary IEEE address location */
 
-extern unsigned char ble_addr[BLE_ADDR_SIZE];
+typedef struct {
+    unsigned char addr[BLE_ADDR_SIZE];
+} ble_addr_t;
+
+extern ble_addr_t ble_node_addr;
 
 void ble_addr_init();
 

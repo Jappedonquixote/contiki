@@ -31,13 +31,16 @@
 /*
  * ble-mac.c
  *
- *  Created on: 10. März 2016
  *      Author: Michael Spörk
  */
 
 #include "net/ble-mac.h"
+#include "net/ble-rdc.h"
 #include "net/packetbuf.h"
 #include "net/netstack.h"
+#include "net/frame-ble.h"
+
+#include <string.h>
 
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
@@ -48,10 +51,92 @@
 #define PRINTF(...)
 #endif
 
+static unsigned int adv_data_length = 0;
+static unsigned int scan_resp_data_length = 0;
+static char adv_data[BLE_ADV_DATA_LENGHT_MAX];
+static char scan_resp_data[BLE_ADV_DATA_LENGHT_MAX];
+
+static unsigned short connection_established = 0;
+
+/*---------------------------------------------------------------------------*/
+static void init_advertising_data()
+{
+    adv_data_length = 0;
+    memset(adv_data, 0x00, BLE_ADV_DATA_LENGHT_MAX);
+    /* BLE flags */
+    adv_data[adv_data_length++] = 2;
+    adv_data[adv_data_length++] = 0x01;
+    adv_data[adv_data_length++] = 0x05;   /* LE limited discoverable (no BR/EDR support) */
+    /* TX power level */
+    adv_data[adv_data_length++] = 2;
+    adv_data[adv_data_length++] = 0x0A;
+    adv_data[adv_data_length++] = 0;      /* 0 dBm; TODO: get actual tx power value */
+    /* service UUIDs (16-bit identifiers) */
+    adv_data[adv_data_length++] = 3;
+    adv_data[adv_data_length++] = 0x03;
+    adv_data[adv_data_length++] = 0x20;
+    adv_data[adv_data_length++] = 0x18;   /* only IP support service exposed */
+    /* service UUIDs (32-bit identifiers) */
+    adv_data[adv_data_length++] = 1;
+    adv_data[adv_data_length++] = 0x05;   /* empty list */
+    /* service UUIDs (128-bit identifiers) */
+    adv_data[adv_data_length++] = 1;
+    adv_data[adv_data_length++] = 0x07;   /* empty list */
+}
+/*---------------------------------------------------------------------------*/
+static void init_scan_resp_data()
+{
+    scan_resp_data_length = 0;
+    memset(scan_resp_data, 0x00, BLE_ADV_DATA_LENGHT_MAX);
+    /* complete device name */
+    scan_resp_data[scan_resp_data_length++] = 1 + strlen(BLE_DEVICE_NAME);
+    scan_resp_data[scan_resp_data_length++] = 0x09;
+    memcpy(&scan_resp_data[scan_resp_data_length],
+           BLE_DEVICE_NAME, strlen(BLE_DEVICE_NAME));
+    scan_resp_data_length += strlen(BLE_DEVICE_NAME);
+    /* slave connection interval range */
+    scan_resp_data[scan_resp_data_length++] = 5;
+    scan_resp_data[scan_resp_data_length++] = 0x12;
+    scan_resp_data[scan_resp_data_length++] = (BLE_SLAVE_CONN_INTERVAL_MIN & 0xFF);
+    scan_resp_data[scan_resp_data_length++] = ((BLE_SLAVE_CONN_INTERVAL_MIN >> 8) & 0xFF);
+    scan_resp_data[scan_resp_data_length++] = (BLE_SLAVE_CONN_INTERVAL_MAX & 0xFF);
+    scan_resp_data[scan_resp_data_length++] = ((BLE_SLAVE_CONN_INTERVAL_MAX >> 8) & 0xFF);
+}
 /*---------------------------------------------------------------------------*/
 static void init(void)
 {
+    int result;
     PRINTF("[ ble-mac ] init()\n");
+
+    init_advertising_data();
+    init_scan_resp_data();
+
+    result = ble_controller_set_advertising_parameters(BLE_ADV_INTERVAL,
+                                                       BLE_ADV_CHANNEL_MASK);
+    if(result != BLE_COMMAND_SUCCESS)
+    {
+        PRINTF("[ ble-mac ] init() could not set adv parameters\n");
+        return;
+    }
+    result = ble_controller_set_advertising_data(adv_data_length, adv_data);
+    if(result != BLE_COMMAND_SUCCESS)
+    {
+        PRINTF("[ ble-mac ] init() could not set adv data\n");
+        return;
+    }
+    result = ble_controller_set_scan_response_data(scan_resp_data_length, scan_resp_data);
+    if(result != BLE_COMMAND_SUCCESS)
+    {
+        PRINTF("[ ble-mac ] init() could not set scan resp data\n");
+        return;
+    }
+    result = ble_controller_enable_advertising();
+    if(result != BLE_COMMAND_SUCCESS)
+    {
+        PRINTF("[ ble-mac ] init() could not enable advertising\n");
+        return;
+    }
+    PRINTF("[ ble-mac ] init() advertising started\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -61,11 +146,17 @@ static void send(mac_callback_t sent_callback, void *ptr)
     NETSTACK_RDC.send(sent_callback, ptr);
 }
 
+
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
     PRINTF("[ ble-mac ] input()\n");
-    NETSTACK_LLSEC.input();
+    if((connection_established == 0) &&
+       (packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE) == FRAME_BLE_ADV_PDU_CONNECT_REQ))
+    {
+        PRINTF("[ ble-mac ] input() CONNECT REQ received\n");
+    }
+//    NETSTACK_LLSEC.input();
 }
 
 /*---------------------------------------------------------------------------*/

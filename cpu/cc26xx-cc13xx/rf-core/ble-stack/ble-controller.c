@@ -51,6 +51,9 @@
 #include "rf-core/ble-stack/ble-controller.h"
 #include "rf-core/rf-core.h"
 
+#include "net/packetbuf.h"
+
+#define BLE_STATUS_CONN_REQ     5
 
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
@@ -83,8 +86,6 @@ static uint32_t ble_overrides[] = {
   0xFFFFFFFF, /* End of override list */
 };
 /*---------------------------------------------------------------------------*/
-static ble_controller_state_t state = BLE_STANDBY;
-/*---------------------------------------------------------------------------*/
 /* advertising parameters */
 /* use 10 seconds as default for the advertising interval */
 static unsigned int adv_interval = (CLOCK_SECOND * 10);
@@ -99,15 +100,25 @@ static char* scan_resp_data = NULL;
 
 static short advertise = 0;
 static struct etimer adv_timer;
+
 /*---------------------------------------------------------------------------*/
-/* scanning parameters */
-/* use 10 seconds as default for the scanning interval */
-static unsigned int scan_interval = (CLOCK_SECOND * 10);
-static unsigned int scan_window = (CLOCK_SECOND * 5);
-static unsigned short scan_channel = BLE_ADV_CHANNEL_1;
+/* connection parameters */
+static unsigned long access_address = 0;
+static unsigned short crc_init_0 = 0;
+static unsigned short crc_init_1 = 0;
+static unsigned short crc_init_2 = 0;
+static unsigned short win_size = 0;
+static unsigned int win_offset = 0;
+static unsigned int interval = 0;
+static unsigned int latency = 0;
+static unsigned int timeout;
+static unsigned long long channel_map = 0;
+static unsigned short hops;
+static unsigned short sca;
 
 /*---------------------------------------------------------------------------*/
 /* buffers for interacting with the radio controller */
+static uint8_t ble_command_buf[BLE_COMMAND_BUFFER_LENGTH] CC_ALIGN(4);
 static uint8_t ble_params_buf[BLE_PARAMS_BUFFER_LENGTH] CC_ALIGN(4);
 static uint8_t ble_output_buf[BLE_OUTPUT_BUFFER_LENGTH] CC_ALIGN(4);
 static uint8_t ble_rx_buf_0[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
@@ -201,12 +212,7 @@ unsigned short setup_ble_mode()
     return BLE_COMMAND_SUCCESS;
 }
 /*---------------------------------------------------------------------------*/
-PROCESS(ble_controller_process, "Bluetooth Low Energy controller");
-/*---------------------------------------------------------------------------*/
-ble_controller_state_t ble_controller_state()
-{
-    return state;
-}
+PROCESS(ble_controller_advertising_process, "BLE/CC26xx advertising process");
 /*---------------------------------------------------------------------------*/
 unsigned short ble_controller_is_enabled()
 {
@@ -306,12 +312,6 @@ unsigned short ble_controller_disable()
 unsigned short ble_controller_set_advertising_parameters(
         unsigned int advertising_interval, char advertising_channel_map)
 {
-    if((advertising_interval < BLE_ADV_INTERVAL_MIN) ||
-       (advertising_interval > BLE_ADV_INTERVAL_MAX))
-    {
-        PRINTF("ble_controller_set_advertising_parameters(): invalid advertising interval\n");
-        return BLE_COMMAND_ERROR;
-    }
     if((advertising_channel_map < BLE_ADV_CHANNEL_MASK_MIN) ||
        (advertising_channel_map > BLE_ADV_CHANNEL_MASK_MAX))
     {
@@ -355,28 +355,37 @@ unsigned short send_advertisement(unsigned short channel)
 {
     char result;
     uint32_t cmd_status;
-    rfc_CMD_BLE_ADV_t cmd;
+    rfc_CMD_BLE_ADV_t *cmd;
     rfc_bleAdvPar_t *params;
     rfc_bleAdvOutput_t *output;
 
+    cmd = (rfc_CMD_BLE_ADV_t *) ble_command_buf;
     params = (rfc_bleAdvPar_t *) ble_params_buf;
     output = (rfc_bleAdvOutput_t *) ble_output_buf;
 
     /* clear all used buffers */
-    memset(&cmd, 0x00, sizeof(cmd));
+    memset(ble_command_buf, 0x00, sizeof(ble_command_buf));
     memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
 
     /* construct the command */
-    cmd.commandNo = CMD_BLE_ADV;
-    cmd.condition.rule = COND_NEVER;
-    cmd.whitening.bOverride = 0;
-    cmd.channel = channel;
-    cmd.pParams = params;
-    cmd.startTrigger.triggerType = TRIG_NOW;
-    cmd.pOutput = output;
+    cmd->commandNo = CMD_BLE_ADV;
+    cmd->condition.rule = COND_NEVER;
+    cmd->whitening.bOverride = 0;
+    cmd->channel = channel;
+    cmd->pParams = params;
+    cmd->startTrigger.triggerType = TRIG_NOW;
+    cmd->pOutput = output;
 
     /* construct the command parameters */
     params->pRxQ = &rx_data_queue;
+    params->rxConfig.bAutoFlushIgnored = 0;
+    params->rxConfig.bAutoFlushCrcErr = 1;
+    params->rxConfig.bAutoFlushEmpty = 0;
+    params->rxConfig.bIncludeLenByte = 1;
+    params->rxConfig.bIncludeCrc = 0;
+    params->rxConfig.bAppendRssi = 1;
+    params->rxConfig.bAppendStatus = 1;
+    params->rxConfig.bAppendTimestamp = 0;
     params->advConfig.advFilterPolicy = 0;
     params->advConfig.deviceAddrType = 0;
     params->advConfig.bStrictLenFilter = 0;
@@ -384,188 +393,96 @@ unsigned short send_advertisement(unsigned short channel)
     params->scanRspLen = scan_resp_data_len;
     params->pAdvData = (uint8_t *) adv_data;
     params->pScanRspData = (uint8_t *) scan_resp_data;
-    params->pDeviceAddress = (uint16_t *) ble_addr;
+    params->pDeviceAddress = (uint16_t *) ble_node_addr.addr;
     params->endTrigger.triggerType = TRIG_NEVER;
 
     /* Send Radio setup to RF Core */
-    if(rf_core_send_cmd((uint32_t)&cmd, &cmd_status) != RF_CORE_CMD_OK) {
+    if(rf_core_send_cmd((uint32_t)cmd, &cmd_status) != RF_CORE_CMD_OK) {
         PRINTF("send_advertisement() send: ");
-        print_command_status(cmd_status, cmd.status);
+        print_command_status(cmd_status, cmd->status);
         return BLE_COMMAND_ERROR;
     }
 
     /* Wait until radio setup is done */
-    if(rf_core_wait_cmd_done(&cmd) != RF_CORE_CMD_OK) {
+    if(rf_core_wait_cmd_done(cmd) != RF_CORE_CMD_OK) {
         PRINTF("send_advertisement() wait: ");
-        print_command_status(cmd_status, cmd.status);
+        print_command_status(cmd_status, cmd->status);
         return BLE_COMMAND_ERROR;
     }
-
-//    PRINTF("send_advertisement() channel %d: ", channel);
-//    print_command_status(cmd_status, cmd.status);
 
     return result;
 }
 
 /*---------------------------------------------------------------------------*/
-unsigned short ble_controller_enable_advertising()
+unsigned short ble_controller_enable_advertising(void)
 {
     advertise = 1;
-    process_start(&ble_controller_process, NULL);
+    process_start(&ble_controller_advertising_process, NULL);
     return BLE_COMMAND_SUCCESS;
 }
 
 /*---------------------------------------------------------------------------*/
-unsigned short ble_controller_disable_advertising()
+unsigned short ble_controller_disable_advertising(void)
 {
     advertise = 0;
-    process_poll(&ble_controller_process);
+    process_poll(&ble_controller_advertising_process);
     return BLE_COMMAND_SUCCESS;
 }
 
 /*---------------------------------------------------------------------------*/
-void print_advertisement_output_data()
+unsigned short get_current_rx_entry_pdu_type(void)
 {
-    rfc_bleAdvOutput_t *output = (rfc_bleAdvOutput_t *) ble_output_buf;
+    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
 
-    PRINTF("advertisement output data:\n");
-    PRINTF("nTxAdvInd:  %d\n", output->nTxAdvInd);
-    PRINTF("nTxScanRsp: %d\n", output->nTxScanRsp);
-    PRINTF("nRxScanReq: %d\n", output->nRxScanReq);
-    PRINTF("nRxConReq:  %d\n", output->nRxConnectReq);
-    PRINTF("nRxNok:     %d\n", output->nRxNok);
-    PRINTF("nRxIgnored: %d\n", output->nRxIgnored);
-    PRINTF("nRxBufFull: %d\n", output->nRxBufFull);
-    PRINTF("lastRssi:   %d\n", output->lastRssi);
-    PRINTF("timeStamp:  %lu\n", output->timeStamp);
-}
-
-
-/*---------------------------------------------------------------------------*/
-unsigned short ble_controller_set_scan_parameters(
-        unsigned int scanning_interval, unsigned int scanning_window,
-        unsigned short scanning_channel)
-{
-    if((scanning_interval < BLE_SCAN_INTERVAL_MIN) ||
-       (scanning_interval > BLE_SCAN_INTERVAL_MAX))
+    if(entry->status != DATA_ENTRY_FINISHED)
     {
-        PRINTF("ble_controller_set_scan_parameters(): invalid scanning interval\n");
-        return BLE_COMMAND_ERROR;
-    }
-    if((scanning_window < BLE_SCAN_WINDOW_MIN) ||
-       (scanning_window > BLE_SCAN_WINDOW_MAX) ||
-       (scanning_window > scanning_interval))
-    {
-        PRINTF("ble_controller_set_scan_parameters() invalid scanning window\n");
-        return BLE_COMMAND_ERROR;
-    }
-    if((scanning_channel < BLE_ADV_CHANNEL_1) ||
-       (scanning_channel > BLE_ADV_CHANNEL_3))
-    {
-        PRINTF("ble_controller_set_scan_parameters() invalid scanning channel\n");
-        return BLE_COMMAND_ERROR;
-    }
-    scan_interval = scanning_interval;
-    scan_window = scanning_window;
-    scan_channel = scanning_channel;
-    return BLE_COMMAND_SUCCESS;
-}
-
-unsigned short send_scan_start()
-{
-    char result;
-    uint32_t timeout_time;
-    uint32_t cmd_status;
-    rfc_CMD_BLE_SCANNER_t cmd;
-    rfc_bleScannerPar_t *params;
-    rfc_bleScannerOutput_t *output;
-
-    params = (rfc_bleScannerPar_t *) ble_params_buf;
-    output = (rfc_bleScannerOutput_t *) ble_output_buf;
-
-    /* clear all used buffers */
-    memset(&cmd, 0x00, sizeof(cmd));
-    memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
-
-    /* convert timeout time*/
-    timeout_time = RTIMER_SECOND * 100;
-    // TODO change to configured scan window
-//    timeout_time = RTIMER_SECOND * ((uint16_t)(scan_window / CLOCK_SECOND));
-    PRINTF("send_scan_start() timeout_time: %lu\n", timeout_time);
-
-    /* maybe reset the current_rx_entry each time scanning is started */
-    current_rx_entry = ble_rx_buf_0;
-
-    /* construct the command */
-    cmd.commandNo = CMD_BLE_SCANNER;
-    cmd.condition.rule = COND_NEVER;
-    cmd.whitening.bOverride = 0;
-    cmd.channel = scan_channel;
-    cmd.pParams = params;
-    cmd.startTrigger.triggerType = TRIG_NOW;
-    cmd.pOutput = output;
-
-    /* construct the command parameters */
-    params->pRxQ = &rx_data_queue;
-    params->scanConfig.scanFilterPolicy = 0;
-    params->scanConfig.bActiveScan = 1;
-    params->scanConfig.deviceAddrType = 0;
-    params->scanConfig.bStrictLenFilter = 0;
-    params->scanConfig.bAutoWlIgnore = 0;
-    params->scanConfig.bEndOnRpt = 1;
-    params->scanReqLen = 0;
-    params->pScanReqData = NULL;
-    params->pDeviceAddress = (uint16_t *) ble_addr;
-    params->timeoutTrigger.triggerType = TRIG_REL_START;
-    params->timeoutTime = timeout_time;
-    params->endTrigger.triggerType = TRIG_NEVER;
-
-    /* Send Radio setup to RF Core */
-    if(rf_core_send_cmd((uint32_t)&cmd, &cmd_status) != RF_CORE_CMD_OK) {
-        PRINTF("send_scan_start() send: ");
-        print_command_status(cmd_status, cmd.status);
-        return BLE_COMMAND_ERROR;
+        return 0;
     }
 
-    /* Wait until radio setup is done */
-    result = rf_core_wait_cmd_done(&cmd);
-    if((result != RF_CORE_CMD_OK) && (cmd.status != RF_CORE_RADIO_OP_STATUS_ACTIVE)) {
-        PRINTF("send_advertisement() wait: ");
-        print_command_status(cmd_status, cmd.status);
-        return BLE_COMMAND_ERROR;
-    }
-//
-//    PRINTF("send_scan_start() channel %d: ", scan_channel);
-//    print_command_status(cmd_status, cmd.status);
-
-    return result;
+    return (current_rx_entry[9] & 0x0F);   // the header is in the 9th element of the receive buffer
 }
 
 /*---------------------------------------------------------------------------*/
-void print_scanning_output_data()
+unsigned short parse_connect_request_data()
 {
-    rfc_bleScannerOutput_t *output = (rfc_bleScannerOutput_t *) ble_output_buf;
+    int data_offset = 23;
+    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
+    if(entry->status != DATA_ENTRY_FINISHED)
+    {
+        return BLE_COMMAND_ERROR;
+    }
 
-    PRINTF("scanning output data:\n");
-    PRINTF("nTxScanReq: %d\n", output->nTxScanReq);
-    PRINTF("nBackedOff: %d\n", output->nBackedOffScanReq);
-    PRINTF("nRxAdvOk:   %d\n", output->nRxAdvOk);
-    PRINTF("nRxAdvIgn:  %d\n", output->nRxAdvIgnored);
-    PRINTF("nRxAdvNok:  %d\n", output->nRxAdvNok);
-    PRINTF("nRxSRspOK:  %d\n", output->nRxScanRspOk);
-    PRINTF("nRxSRspIgn: %d\n", output->nRxScanRspIgnored);
-    PRINTF("nRxSRspNok: %d\n", output->nRxScanRspNok);
-    PRINTF("nRxAdvFull: %d\n", output->nRxAdvBufFull);
-    PRINTF("nRxSRpFull: %d\n", output->nRxScanRspBufFull);
-    PRINTF("lastRssi:   %d\n", output->lastRssi);
-    PRINTF("timeStamp:  %lu\n", output->timeStamp);
-}
+//    memcpy(&access_address, &current_rx_entry[data_offset], 4);
+    access_address = (current_rx_entry[data_offset] << 24) + (current_rx_entry[data_offset + 1] << 16) +
+                     (current_rx_entry[data_offset + 2] << 8) + current_rx_entry[data_offset + 3];
 
-/*---------------------------------------------------------------------------*/
-unsigned short ble_controller_set_scan_enable()
-{
-    send_scan_start();
-//    print_scanning_output_data();
+
+
+    crc_init_0 = current_rx_entry[data_offset + 4];
+    crc_init_1 = current_rx_entry[data_offset + 5];
+    crc_init_2 = current_rx_entry[data_offset + 6];
+    win_size = current_rx_entry[data_offset + 7];
+    win_offset = (current_rx_entry[data_offset + 9] << 8) + current_rx_entry[data_offset + 8];
+    interval = (current_rx_entry[data_offset + 11] << 8) + current_rx_entry[data_offset + 10];
+    latency = (current_rx_entry[data_offset + 13] << 8) + current_rx_entry[data_offset + 12];
+    timeout = (current_rx_entry[data_offset + 15] << 8) + current_rx_entry[data_offset + 14];
+    memcpy(&channel_map, &current_rx_entry[data_offset + 16], 5);
+    hops = (current_rx_entry[data_offset + 21] & 0x01F);
+    sca = (current_rx_entry[data_offset + 21] >> 5) & 0x07;
+
+    PRINTF("parse_connect_request_data()\n");
+    PRINTF("access address:   %20lX\n", access_address);
+    PRINTF("crc_init_0:       %20X\n", crc_init_0);
+    PRINTF("crc_init_1:       %20X\n", crc_init_1);
+    PRINTF("crc_init_2:       %20X\n", crc_init_2);
+    PRINTF("win_size:         %20X\n", win_size);
+    PRINTF("win_offset:       %20X\n", win_offset);
+    PRINTF("interval:         %20X\n", interval);
+    PRINTF("latency:          %20X\n", latency);
+    PRINTF("timeout:          %20X\n", timeout);
+    PRINTF("channel_map:      %20llX\n", channel_map);
+    PRINTF("hops:             %20X\n", hops);
+    PRINTF("sca:              %20X\n", sca);
     return BLE_COMMAND_SUCCESS;
 }
 
@@ -574,6 +491,8 @@ unsigned short ble_controller_read_current_rx_buf(
         void *buffer, unsigned short buffer_length)
 {
     int len = 0;
+    int8_t rssi;
+    uint8_t channel;
     rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
 
     if(entry->status != DATA_ENTRY_FINISHED)
@@ -581,8 +500,15 @@ unsigned short ble_controller_read_current_rx_buf(
         return 0;
     }
 
-    len = current_rx_entry[8];
+    len = current_rx_entry[8] - 2;              // last 2 bytes are status and rssi
     memcpy(buffer, (char *)&current_rx_entry[9], len);
+
+    rssi = (int8_t) current_rx_entry[8 + len + 1];
+    channel = (uint8_t)current_rx_entry[8 + len + 2];
+    packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
+    packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
+
+
     return len;
 }
 
@@ -600,10 +526,106 @@ void ble_controller_free_current_rx_buf()
 }
 
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(ble_controller_process, ev, data)
+unsigned short send_slave_command()
+{
+    char result;
+    uint32_t cmd_status;
+    rfc_CMD_BLE_SLAVE_t *cmd;
+    rfc_bleSlavePar_t *params;
+    rfc_bleMasterSlaveOutput_t *output;
+
+    cmd = (rfc_CMD_BLE_SLAVE_t *) ble_command_buf;
+    params = (rfc_bleSlavePar_t *) ble_params_buf;
+    output = (rfc_bleMasterSlaveOutput_t *) ble_output_buf;
+
+    /* clear all used buffers */
+    memset(ble_command_buf, 0x00, sizeof(ble_command_buf));
+    memset(ble_params_buf, 0x00, sizeof(ble_params_buf));
+    memset(ble_output_buf, 0x00, sizeof(ble_output_buf));
+
+    /* construct the command */
+    cmd->commandNo = CMD_BLE_SLAVE;
+    cmd->condition.rule = COND_NEVER;
+    cmd->whitening.bOverride = 0;
+    cmd->channel = hops;
+    cmd->pParams = params;
+    cmd->startTrigger.triggerType = TRIG_NOW;
+    cmd->pOutput = output;
+
+    /* construct the command parameters */
+    params->pRxQ = &rx_data_queue;
+//    params->pTxQ = 0;
+    params->rxConfig.bAutoFlushIgnored = 0;
+    params->rxConfig.bAutoFlushCrcErr = 0;
+    params->rxConfig.bAutoFlushEmpty = 0;
+    params->rxConfig.bIncludeLenByte = 1;
+    params->rxConfig.bIncludeCrc = 0;
+    params->rxConfig.bAppendRssi = 1;
+    params->rxConfig.bAppendStatus = 1;
+    params->rxConfig.bAppendTimestamp = 0;
+    params->maxNack = 0;
+    params->maxPkt = 0;
+    params->accessAddress = access_address;
+    params->crcInit0 = crc_init_0;
+    params->crcInit1 = crc_init_1;
+    params->crcInit2 = crc_init_2;
+    params->timeoutTrigger.triggerType = TRIG_NEVER;
+    params->endTrigger.triggerType = TRIG_NEVER;
+
+    /* Send Radio setup to RF Core */
+    if(rf_core_send_cmd((uint32_t)cmd, &cmd_status) != RF_CORE_CMD_OK) {
+        PRINTF("send_slave_command() send: ");
+        print_command_status(cmd_status, cmd->status);
+        return BLE_COMMAND_ERROR;
+    }
+
+    /* Wait until radio setup is done */
+    if(rf_core_wait_cmd_done(cmd) != RF_CORE_CMD_OK) {
+        PRINTF("send_slave_command() wait: ");
+        print_command_status(cmd_status, cmd->status);
+        return BLE_COMMAND_ERROR;
+    }
+
+    return result;
+}
+
+static void print_status()
+{
+    rfc_bleRadioOp_t *cmd = (rfc_bleRadioOp_t *) ble_command_buf;
+
+    PRINTF("BLE command status\n");
+    PRINTF("number:  %X\n", cmd->commandNo);
+    PRINTF("channel: %d\n", cmd->channel);
+    print_command_status(0x00, cmd->status);
+}
+
+static void print_slave_output()
+{
+    rfc_bleMasterSlaveOutput_t *output = (rfc_bleMasterSlaveOutput_t *) ble_output_buf;
+
+    PRINTF("BLE slave command output\n");
+    PRINTF("nTx:           %d\n", output->nTx);
+    PRINTF("nTxAck:        %d\n", output->nTxAck);
+    PRINTF("nTxCtrl:       %d\n", output->nTxCtrl);
+    PRINTF("nTxCtrlAck:    %d\n", output->nTxCtrlAck);
+    PRINTF("nTxCtrlAckAck: %d\n", output->nTxCtrlAckAck);
+    PRINTF("nTxRetrans:    %d\n", output->nTxRetrans);
+    PRINTF("nTxEntryDone:  %d\n", output->nTxEntryDone);
+    PRINTF("nRxOk:         %d\n", output->nRxOk);
+    PRINTF("nRxCtrl:       %d\n", output->nRxCtrl);
+    PRINTF("nRxCtlrAck:    %d\n", output->nRxCtrlAck);
+    PRINTF("nRxNok:        %d\n", output->nRxNok);
+    PRINTF("nRxIgnored:    %d\n", output->nRxIgnored);
+    PRINTF("nRxEmpty:      %d\n", output->nRxEmpty);
+    PRINTF("nRxBufFull:    %d\n", output->nRxBufFull);
+    PRINTF("lastRssi:      %d\n", output->lastRssi);
+}
+
+/*---------------------------------------------------------------------------*/
+PROCESS_THREAD(ble_controller_advertising_process, ev, data)
 {
     PROCESS_BEGIN();
-    PRINTF("ble_controller_process: advertising started\n");
+    PRINTF("ble_controller_advertising_process: started\n");
     while(advertise == 1)
     {
         if(adv_channel_map & BLE_ADV_CHANNEL_1_MASK) {
@@ -616,10 +638,29 @@ PROCESS_THREAD(ble_controller_process, ev, data)
             send_advertisement(BLE_ADV_CHANNEL_3);
         }
         etimer_set(&adv_timer, adv_interval);
-        PROCESS_YIELD_UNTIL(etimer_expired(&adv_timer)
-                            || (ev == PROCESS_EVENT_POLL));
+
+        PROCESS_YIELD_UNTIL(etimer_expired(&adv_timer) ||
+                            ev == PROCESS_EVENT_POLL ||
+                            ev == rf_core_event);
+
+        if(ev == rf_core_event && get_current_rx_entry_pdu_type() == BLE_STATUS_CONN_REQ) {
+           PRINTF("ble_controller_connection_process: connection request received\n");
+           if(parse_connect_request_data() != BLE_COMMAND_SUCCESS)
+           {
+               PRINTF("ble_controller_advertising_process: could not parse header\n");
+           }
+           else
+           {
+               ble_controller_disable_advertising();
+               send_slave_command();
+               etimer_set(&adv_timer, adv_interval);
+               PROCESS_YIELD_UNTIL(etimer_expired(&adv_timer));
+               print_status();
+               print_slave_output();
+           }
+        }
+
     }
-    PRINTF("ble_controller_process: advertising stopped\n");
-    print_advertisement_output_data();
+    PRINTF("ble_controller_advertising_process: advertising stopped\n");
     PROCESS_END();
 }

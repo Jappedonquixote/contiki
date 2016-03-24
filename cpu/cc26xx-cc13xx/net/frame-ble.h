@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Michael Spörk
+ * Copyright (c) 2016, Michael Spoerk
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,42 +29,58 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-rdc.h
+ * frame-ble.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef BLE_RDC_H_
-#define BLE_RDC_H_
+#ifndef FRAME_BLE_H_
+#define FRAME_BLE_H_
 
-#include "contiki.h"
+#include "contiki-conf.h"
 
-/*---------------------------------------------------------------------------*/
-/* advertising parameters */
-#define BLE_ADV_INTERVAL_MIN                ( 0.020 * CLOCK_SECOND)
-#define BLE_ADV_INTERVAL_MAX                (10.240 * CLOCK_SECOND)
-/* use maximum advertising interval as default to preserve battery */
-#define BLE_ADV_INTERVAL                    (BLE_ADV_INTERVAL_MIN * 100)
+#include "rf-core/ble-stack/ble-addr.h"
 
-/*---------------------------------------------------------------------------*/
-/* connection parameters */
-#define BLE_CONN_SUPERVISION_INTERVAL_MIN   ( 0.100 * CLOCK_SECOND)
-#define BLE_CONN_SUPERVISION_INTERVAL_MAX   (32.000 * CLOCK_SECOND)
-/* use maximum supervision interval as default to preserve battery */
-#define BLE_CONN_SUPERVISION_INTERVAL       BLE_CONN_SUPERVISION_INTERVAL_MAX
+#define FRAME_BLE_ADV_PDU_ADV_IND               0b0000
+#define FRAME_BLE_ADV_PDU_ADV_DIRECTED_IND      0b0001
+#define FRAME_BLE_ADV_PDU_ADV_NONCONN_IND       0b0010
+#define FRAME_BLE_ADV_PDU_SCAN_REQ              0b0011
+#define FRAME_BLE_ADV_PDU_SCAN_RSP              0b0100
+#define FRAME_BLE_ADV_PDU_CONNECT_REQ           0b0101
+#define FRAME_BLE_ADV_PDU_ADV_SCAN_IND          0b0110
 
-#define BLE_CONN_INTERVAL_MIN               0x0006      /* 7.5 milliseconds*/
-#define BLE_CONN_INTERVAL_MAX               0x0C80      /* 4 seconds */
-/* choose the slave connection interval within the defined bounds */
-//#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0960      /* 3 seconds */
-#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0006
-#define BLE_SLAVE_CONN_INTERVAL_MAX         0x0C80      /* 4 seconds */
+/*
+ * Frame type of the current BLE frame.
+ */
+typedef enum {
+    FRAME_BLE_TYPE_ADV_PDU,
+    FRAME_BLE_TYPE_DATA_PDU
+} frame_ble_type_t;
 
-#define BLE_CONN_SLAVE_LATENCY_MIN          0
-#define BLE_CONN_SLAVE_LATENCY_MAX          (BLE_CONN_SUPERVISION_INTERVAL/BLE_CONN_INTERVAL - 1)
-/* use maximum slave latency as default to preserve battery */
-#define BLE_CONN_SLAVE_LATENCY              BLE_CONN_SLAVE_LATENCY_MAX
+/*
+ * header of BLE advertising PDU
+ */
+typedef struct {
+    uint8_t pdu_type:4;     /* PDU type field (e.g. scan request, ...), see BLE specification */
+    uint8_t reserved:2;     /* reserved bits */
+    uint8_t tx_add:1;       /* TxAdd, see BLE specification */
+    uint8_t rx_add:1;       /* RxAdd, see BLE specification */
+    uint8_t length;         /* advertising payload length */
+} frame_ble_adv_hdr_t;
 
+/*
+ * BLE header
+ */
+typedef union {
+    frame_ble_adv_hdr_t hdr_adv;
+} frame_ble_hdr_t;
 
+typedef struct {
+    frame_ble_type_t frame_type;
+    frame_ble_hdr_t hdr;        /* advertising PDU header */
+    uint8_t *payload;           /* advertising payload */
+} frame_ble_t;
 
-#endif /* BLE_RDC_H_ */
+int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame);
+
+#endif /* FRAME_BLE_H_ */

@@ -17,7 +17,7 @@
 #define CC_ALIGN_ATTR(n)
 #endif
 /*---------------------------------------------------------------------------*/
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -56,8 +56,8 @@ init(void)
 	{
 	    PRINTF("[ ble-phy ] init(): could not reset ble controller\n");
 	}
-
 	ENERGEST_ON(ENERGEST_TYPE_LISTEN);
+
 	return BLE_COMMAND_SUCCESS;
 }
 

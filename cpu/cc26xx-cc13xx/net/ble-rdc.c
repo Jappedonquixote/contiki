@@ -39,6 +39,8 @@
 #include "net/queuebuf.h"
 #include "net/netstack.h"
 
+#include "net/framer-ble.h"
+
 #define DEBUG 1
 #if DEBUG
 #include <stdio.h>
@@ -67,20 +69,15 @@ static void send_list(mac_callback_t sent_callback, void *ptr, struct rdc_buf_li
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
-    int i;
-    char *buffer = packetbuf_dataptr();
+    int hdr_len;
     PRINTF("[ ble-rdc ] input()\n");
-    for(i = 0; i < packetbuf_datalen(); ++i)
+    hdr_len = NETSTACK_FRAMER.parse();
+    if(hdr_len < 0)
     {
-        if((i % 8 == 0) && i != 0)
-        {
-            PRINTF("   ");
-        }
-        PRINTF("%02X ", buffer[i]);
+        PRINTF("[ ble-rdc ] input() could not parse frame\n");
+        return;
     }
-    PRINTF("\n");
-
-//    NETSTACK_MAC.input();
+    NETSTACK_MAC.input();
 }
 
 /*---------------------------------------------------------------------------*/

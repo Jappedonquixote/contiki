@@ -28,43 +28,36 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*---------------------------------------------------------------------------*/
-/*
- * ble-rdc.h
- *
- *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
+/**
+ * \file
+ * 		   A test for the Bluetooth Low-Energy radio of Contiki
+ * \author
+ *         Michael Spörk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef BLE_RDC_H_
-#define BLE_RDC_H_
-
 #include "contiki.h"
+#include "dev/leds.h"
+
+#include <stdio.h>
+
 
 /*---------------------------------------------------------------------------*/
-/* advertising parameters */
-#define BLE_ADV_INTERVAL_MIN                ( 0.020 * CLOCK_SECOND)
-#define BLE_ADV_INTERVAL_MAX                (10.240 * CLOCK_SECOND)
-/* use maximum advertising interval as default to preserve battery */
-#define BLE_ADV_INTERVAL                    (BLE_ADV_INTERVAL_MIN * 100)
-
+PROCESS(ble_test_process, "BLE connection setup test process");
+AUTOSTART_PROCESSES(&ble_test_process);
 /*---------------------------------------------------------------------------*/
-/* connection parameters */
-#define BLE_CONN_SUPERVISION_INTERVAL_MIN   ( 0.100 * CLOCK_SECOND)
-#define BLE_CONN_SUPERVISION_INTERVAL_MAX   (32.000 * CLOCK_SECOND)
-/* use maximum supervision interval as default to preserve battery */
-#define BLE_CONN_SUPERVISION_INTERVAL       BLE_CONN_SUPERVISION_INTERVAL_MAX
+PROCESS_THREAD(ble_test_process, ev, data)
+{
+	PROCESS_BEGIN();
 
-#define BLE_CONN_INTERVAL_MIN               0x0006      /* 7.5 milliseconds*/
-#define BLE_CONN_INTERVAL_MAX               0x0C80      /* 4 seconds */
-/* choose the slave connection interval within the defined bounds */
-//#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0960      /* 3 seconds */
-#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0006
-#define BLE_SLAVE_CONN_INTERVAL_MAX         0x0C80      /* 4 seconds */
+	printf("BLE connection setup process\n");
 
-#define BLE_CONN_SLAVE_LATENCY_MIN          0
-#define BLE_CONN_SLAVE_LATENCY_MAX          (BLE_CONN_SUPERVISION_INTERVAL/BLE_CONN_INTERVAL - 1)
-/* use maximum slave latency as default to preserve battery */
-#define BLE_CONN_SLAVE_LATENCY              BLE_CONN_SLAVE_LATENCY_MAX
+	leds_on(LEDS_GREEN);
 
+	while(1)
+	{
+	    PROCESS_YIELD();
+	}
 
-
-#endif /* BLE_RDC_H_ */
+    PROCESS_END();
+}
+/*---------------------------------------------------------------------------*/

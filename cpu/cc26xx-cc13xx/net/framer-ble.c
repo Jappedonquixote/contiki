@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Michael Spörk
+ * Copyright (c) 2016, Michael Spoerk
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,42 +29,61 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-rdc.h
+ * framer-ble.c
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef BLE_RDC_H_
-#define BLE_RDC_H_
+#include "net/framer-ble.h"
+#include "net/frame-ble.h"
 
-#include "contiki.h"
-
-/*---------------------------------------------------------------------------*/
-/* advertising parameters */
-#define BLE_ADV_INTERVAL_MIN                ( 0.020 * CLOCK_SECOND)
-#define BLE_ADV_INTERVAL_MAX                (10.240 * CLOCK_SECOND)
-/* use maximum advertising interval as default to preserve battery */
-#define BLE_ADV_INTERVAL                    (BLE_ADV_INTERVAL_MIN * 100)
+#include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
-/* connection parameters */
-#define BLE_CONN_SUPERVISION_INTERVAL_MIN   ( 0.100 * CLOCK_SECOND)
-#define BLE_CONN_SUPERVISION_INTERVAL_MAX   (32.000 * CLOCK_SECOND)
-/* use maximum supervision interval as default to preserve battery */
-#define BLE_CONN_SUPERVISION_INTERVAL       BLE_CONN_SUPERVISION_INTERVAL_MAX
+#define DEBUG 1
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#define PRINTADDR(addr) PRINTF(" %02X:%02X:%02X:%02X:%02X:%02X ", ((uint8_t *)addr)[5], ((uint8_t *)addr)[4], ((uint8_t *)addr)[3], ((uint8_t *)addr)[2], ((uint8_t *)addr)[1], ((uint8_t *)addr)[0])
 
-#define BLE_CONN_INTERVAL_MIN               0x0006      /* 7.5 milliseconds*/
-#define BLE_CONN_INTERVAL_MAX               0x0C80      /* 4 seconds */
-/* choose the slave connection interval within the defined bounds */
-//#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0960      /* 3 seconds */
-#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0006
-#define BLE_SLAVE_CONN_INTERVAL_MAX         0x0C80      /* 4 seconds */
-
-#define BLE_CONN_SLAVE_LATENCY_MIN          0
-#define BLE_CONN_SLAVE_LATENCY_MAX          (BLE_CONN_SUPERVISION_INTERVAL/BLE_CONN_INTERVAL - 1)
-/* use maximum slave latency as default to preserve battery */
-#define BLE_CONN_SLAVE_LATENCY              BLE_CONN_SLAVE_LATENCY_MAX
+#else
+#define PRINTF(...)
+#define PRINTADDR(addr)
+#endif
 
 
+/*---------------------------------------------------------------------------*/
+int length(void)
+{
 
-#endif /* BLE_RDC_H_ */
+}
+
+/*---------------------------------------------------------------------------*/
+int create(void)
+{
+    return FRAMER_FAILED;
+}
+
+
+/*---------------------------------------------------------------------------*/
+int parse(void)
+{
+    int hdr_len;
+    frame_ble_t frame;
+    hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), &frame);
+
+    if(hdr_len && packetbuf_hdrreduce(hdr_len)) {
+        if(frame.frame_type == FRAME_BLE_TYPE_ADV_PDU) {
+            packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, frame.hdr.hdr_adv.pdu_type);
+        }
+        return hdr_len;
+    }
+    return FRAMER_FAILED;
+}
+
+/*---------------------------------------------------------------------------*/
+const struct framer framer_ble = {
+  length,
+  create,
+  parse
+};
