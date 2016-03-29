@@ -44,7 +44,7 @@
 #define BLE_ADV_INTERVAL_MIN                ( 0.020 * CLOCK_SECOND)
 #define BLE_ADV_INTERVAL_MAX                (10.240 * CLOCK_SECOND)
 /* use maximum advertising interval as default to preserve battery */
-#define BLE_ADV_INTERVAL                    (BLE_ADV_INTERVAL_MIN * 100)
+#define BLE_ADV_INTERVAL                    (BLE_ADV_INTERVAL_MIN * 15)
 
 /*---------------------------------------------------------------------------*/
 /* connection parameters */

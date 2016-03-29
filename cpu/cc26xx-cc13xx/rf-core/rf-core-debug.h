@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Michael Spörk
+ * Copyright (c) 2016, Michael Spoerk
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,32 +28,20 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*---------------------------------------------------------------------------*/
-/**
- * \file
- * 		   A test for the Bluetooth Low-Energy radio of Contiki
- * \author
- *         Michael Spörk <m.spoerk@student.tugraz.at>
+/*
+ * rf-core-debug.h
+ *
+ *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#include "contiki.h"
-#include "dev/leds.h"
+#ifndef CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_
+#define CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_
 
-#include <stdio.h>
+#include "contiki-conf.h"
 
-/*---------------------------------------------------------------------------*/
-PROCESS(ble_test_process, "BLE connection setup test process");
-AUTOSTART_PROCESSES(&ble_test_process);
-/*---------------------------------------------------------------------------*/
-PROCESS_THREAD(ble_test_process, ev, data)
-{
-	PROCESS_BEGIN();
-	leds_on(LEDS_GREEN);
+void print_cmdsta(uint32_t cmdsta);
+void print_command_status(uint16_t status_field);
+void print_slave_output(uint8_t *ble_slave_output_buf);
+void print_slave_sequence_stats(uint8_t *ble_slave_params_buf);
 
-	while(1)
-	{
-	    PROCESS_YIELD();
-	}
-
-    PROCESS_END();
-}
-/*---------------------------------------------------------------------------*/
+#endif /* CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_ */

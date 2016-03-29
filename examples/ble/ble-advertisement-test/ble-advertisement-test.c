@@ -64,22 +64,62 @@ PROCESS_THREAD(ble_test_process, ev, data)
 {
 	PROCESS_BEGIN();
 
-	/* initialize advertisement data */
-	memset(adv_data, 0, BLE_ADVERTISEMENT_BUFFER_LENGTH);
-	adv_data[adv_data_len++] = 0x02;
-	adv_data[adv_data_len++] = 0x01;	// BLE device info
-	adv_data[adv_data_len++] = 0x1a;	// LE general discoverable + BR/EDR
-	adv_data[adv_data_len++] = 1 + strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
-	adv_data[adv_data_len++] = 0x09;	// BLE device name
-	memcpy(&adv_data[adv_data_len], BLE_ADVERTISEMENT_DEVICE_NAME,
-	       strlen(BLE_ADVERTISEMENT_DEVICE_NAME));
-	adv_data_len += strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+//	/* initialize advertisement data */
+//	memset(adv_data, 0, BLE_ADVERTISEMENT_BUFFER_LENGTH);
+//	adv_data[adv_data_len++] = 0x02;
+//	adv_data[adv_data_len++] = 0x01;	// BLE device info
+//	adv_data[adv_data_len++] = 0x1a;	// LE general discoverable + BR/EDR
+//	adv_data[adv_data_len++] = 1 + strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+//	adv_data[adv_data_len++] = 0x09;	// BLE device name
+//	memcpy(&adv_data[adv_data_len], BLE_ADVERTISEMENT_DEVICE_NAME,
+//	       strlen(BLE_ADVERTISEMENT_DEVICE_NAME));
+//	adv_data_len += strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+//
+//	/* initialize scan response data */
+//	memset(scan_resp_data, 0, BLE_SCAN_RESPONSE_BUFFER_LENGTH);
+//	for(scan_resp_data_len = 0; scan_resp_data_len < 16; ++scan_resp_data_len){
+//	    scan_resp_data[scan_resp_data_len] = scan_resp_data_len;
+//	}
+//
 
-	/* initialize scan response data */
-	memset(scan_resp_data, 0, BLE_SCAN_RESPONSE_BUFFER_LENGTH);
-	for(scan_resp_data_len = 0; scan_resp_data_len < 16; ++scan_resp_data_len){
-	    scan_resp_data[scan_resp_data_len] = scan_resp_data_len;
-	}
+
+	/* initialize advertising data */
+	memset(adv_data , 0x00, BLE_ADVERTISEMENT_BUFFER_LENGTH);
+	/* FLAGS */
+	adv_data[adv_data_len++] = 2;
+	adv_data[adv_data_len++] = 0x01;
+	adv_data[adv_data_len++] = 0x06;        // LE general discoverable (no BR/EDR support)
+	/* TX power level */
+	adv_data[adv_data_len++] = 2;           // 2 bytes long
+	adv_data[adv_data_len++] = 0x0A;
+	adv_data[adv_data_len++] = 0;           // 0 dBm TODO: get actual value
+	/* service UUIDs (16-bit) */
+	adv_data[adv_data_len++] = 3;
+	adv_data[adv_data_len++] = 0x03;
+	adv_data[adv_data_len++] = 0x20;        // UUID of IPSS
+	adv_data[adv_data_len++] = 0x18;
+	/* service UUIDs (32-bit) */
+	adv_data[adv_data_len++] = 1;
+	adv_data[adv_data_len++] = 0x05;
+    /* service UUIDs (128-bit) */
+    adv_data[adv_data_len++] = 1;
+    adv_data[adv_data_len++] = 0x07;
+
+    /* initialize scan response data */
+    memset(scan_resp_data, 0x00, BLE_SCAN_RESPONSE_BUFFER_LENGTH);
+    /* complete device name */
+    scan_resp_data[scan_resp_data_len++] = 1 + strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+    scan_resp_data[scan_resp_data_len++] = 0x09;
+    memcpy(&scan_resp_data[scan_resp_data_len], BLE_ADVERTISEMENT_DEVICE_NAME, strlen(BLE_ADVERTISEMENT_DEVICE_NAME));
+    scan_resp_data_len += strlen(BLE_ADVERTISEMENT_DEVICE_NAME);
+    /* slave connection interval range */
+    scan_resp_data[scan_resp_data_len++] = 5;
+    scan_resp_data[scan_resp_data_len++] = 0x12;
+    scan_resp_data[scan_resp_data_len++] = 0x06;
+    scan_resp_data[scan_resp_data_len++] = 0x00;
+    scan_resp_data[scan_resp_data_len++] = 0x80;
+    scan_resp_data[scan_resp_data_len++] = 0x0C;
+
 
 	printf("BLE advertisement test\n");
 	leds_set(LEDS_GREEN);

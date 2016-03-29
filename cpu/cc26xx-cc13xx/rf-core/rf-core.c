@@ -468,7 +468,6 @@ PROCESS_THREAD(rf_core_process, ev, data)
   PROCESS_BEGIN();
   while(1) {
     PROCESS_YIELD_UNTIL(ev == rf_core_event);
-    PRINTF("rf_core_event received\n");
     do {
       watchdog_periodic();
       packetbuf_clear();

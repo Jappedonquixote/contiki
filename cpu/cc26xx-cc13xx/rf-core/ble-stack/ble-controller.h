@@ -58,26 +58,6 @@
 #define BLE_OUTPUT_BUFFER_LENGTH        32
 
 /*---------------------------------------------------------------------------*/
-/* controller states */
-typedef enum {
-    /* controller is in standby */
-    BLE_STANDBY,
-
-    /* controller is advertising */
-    BLE_ADVERTISING,
-
-    /* controller is scanning */
-    BLE_SCANNING,
-
-    /* controller tries to initiate a connection */
-    BLE_INITIATING,
-
-    /* controller is connected to another ble device */
-    BLE_CONNECTION
-} ble_controller_state_t;
-
-
-/*---------------------------------------------------------------------------*/
 /* general functions */
 unsigned short ble_controller_is_enabled(void);
 
@@ -87,7 +67,6 @@ unsigned short ble_controller_enable(void);
 
 unsigned short ble_controller_disable(void);
 
-ble_controller_state_t ble_controller_state(void);
 
 /*---------------------------------------------------------------------------*/
 /* advertising functions */
