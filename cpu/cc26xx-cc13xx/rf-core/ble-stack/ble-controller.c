@@ -53,11 +53,19 @@
 #include "rf-core/rf-core-debug.h"
 #include "net/packetbuf.h"
 
+#define RX_CONFIG_INCLUDE_STATUS    1
+#define RX_CONFIG_INCLUDE_RSSI      1
+#define RX_CONFIG_INCLUDE_TIMESTAMP 1
+
 #define TIMESTAMP_LOCATION 0x40043004
+
 
 #define RF_RADIO_OP_GET_STATUS(a) (((rfc_radioOp_t *)a)->status)
 
 #define BLE_STATUS_CONN_REQ     5
+
+/* used for converting ticks of the rf_core into rtimer seconds */
+#define RF_CORE_TICKS_IN_RTIMER_SEC(a) (((uint32_t) (a)/61))
 
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
@@ -87,6 +95,17 @@ static uint32_t ble_overrides[] = {
   0x00456088, /* Adjust AGC reference level */
   0xFFFFFFFF, /* End of override list */
 };
+
+/*---------------------------------------------------------------------------*/
+/* BLE controller states */
+typedef enum  {
+    OFF,
+    ADVERTISING,
+    CONNECTED
+} ble_controller_states_t;
+
+static ble_controller_states_t state = OFF;
+
 /*---------------------------------------------------------------------------*/
 /* advertising parameters */
 /* use 10 seconds as default for the advertising interval */
@@ -100,7 +119,6 @@ static char* adv_data = NULL;
 static unsigned int scan_resp_data_len = 0;
 static char* scan_resp_data = NULL;
 
-static bool advertise = 0;
 static struct etimer adv_timer;
 
 /* advertising command buffers */
@@ -119,7 +137,6 @@ volatile static uint8_t *adv_current_rx_entry;
 
 /*---------------------------------------------------------------------------*/
 /* connection parameters */
-static bool conn_established;
 static uint32_t access_address = 0;
 static uint8_t crc_init_0 = 0;
 static uint8_t crc_init_1 = 0;
@@ -132,8 +149,11 @@ static uint16_t timeout;
 static uint64_t data_channel_map = 0;
 static uint8_t hops = 0;
 static uint8_t sca = 0;
-static uint32_t conn_req_timestamp = 0;
+static uint32_t conn_req_timestamp_rf_ticks = 0;
+static uint32_t next_anchor_rf_ticks = 0;
 static uint8_t current_channel = 0;
+
+static struct rtimer conn_timer;
 
 /* slave command buffers */
 static uint8_t ble_slave_cmd_buf[BLE_COMMAND_BUFFER_LENGTH] CC_ALIGN(4);
@@ -149,7 +169,6 @@ volatile static uint8_t *slave_current_rx_entry;
 static dataQueue_t slave_tx_data_queue = { 0 };
 volatile static uint8_t *slave_current_tx_entry;
 
-static struct rtimer conn_event_timer;
 static uint32_t conn_event_number = 0;
 /*---------------------------------------------------------------------------*/
 unsigned short setup_ble_mode()
@@ -399,9 +418,9 @@ void create_adv_params(rfc_bleAdvPar_t *params)
     params->rxConfig.bAutoFlushEmpty = 0;
     params->rxConfig.bIncludeLenByte = 1;
     params->rxConfig.bIncludeCrc = 0;
-    params->rxConfig.bAppendRssi = 0;
-    params->rxConfig.bAppendStatus = 0;
-    params->rxConfig.bAppendTimestamp = 1;
+    params->rxConfig.bAppendRssi = RX_CONFIG_INCLUDE_RSSI;
+    params->rxConfig.bAppendStatus = RX_CONFIG_INCLUDE_STATUS;
+    params->rxConfig.bAppendTimestamp = RX_CONFIG_INCLUDE_TIMESTAMP;
     params->advConfig.advFilterPolicy = 0;
     params->advConfig.deviceAddrType = 0;
     params->advConfig.bStrictLenFilter = 0;
@@ -433,7 +452,7 @@ unsigned short send_advertisement(rfc_bleRadioOp_t * cmd)
 /*---------------------------------------------------------------------------*/
 unsigned short ble_controller_enable_advertising(void)
 {
-    advertise = 1;
+    state = ADVERTISING;
     process_start(&ble_controller_advertising_process, NULL);
     process_start(&ble_controller_connection_process, NULL);
     return BLE_COMMAND_SUCCESS;
@@ -442,7 +461,7 @@ unsigned short ble_controller_enable_advertising(void)
 /*---------------------------------------------------------------------------*/
 unsigned short ble_controller_disable_advertising(void)
 {
-    advertise = 0;
+    state = OFF;
     process_poll(&ble_controller_advertising_process);
     return BLE_COMMAND_SUCCESS;
 }
@@ -456,7 +475,7 @@ PROCESS_THREAD(ble_controller_advertising_process, ev, data)
 
     PROCESS_BEGIN();
     PRINTF("ble_controller_advertising_process: started\n");
-    while(advertise == 1)
+    while(state == ADVERTISING)
     {
         create_adv_params(params);
         if((cmd->status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_CONNECT) &&
@@ -492,46 +511,75 @@ unsigned short ble_controller_read_current_rx_buf(
     int len = 0;
     int8_t rssi;
     uint8_t channel;
-    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) adv_current_rx_entry;
+    rfc_dataEntryGeneral_t *entry;
+
+    if(state == ADVERTISING)
+    {
+        PRINTF("ble_controller_read_current_rx_buf() ADV\n");
+        entry = (rfc_dataEntryGeneral_t *) adv_current_rx_entry;
+    }
+    else
+    {
+        PRINTF("ble_controller_read_current_rx_buf() DATA\n");
+        entry = (rfc_dataEntryGeneral_t *) slave_current_rx_entry;
+    }
 
     if(entry->status != DATA_ENTRY_FINISHED)
     {
         return 0;
     }
 
-    len = adv_current_rx_entry[8] - 2;              // last 2 bytes are status and rssi
+    len = adv_current_rx_entry[8] - 6;              // last 4 bytes are timestamp
     memcpy(buffer, (char *)&adv_current_rx_entry[9], len);
+    packetbuf_set_attr(PACKETBUF_ATTR_RSSI, adv_current_rx_entry[9 + len]);
+    packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, adv_current_rx_entry[9 + len + 1]);
 
-    rssi = (int8_t) adv_current_rx_entry[8 + len + 1];
-    channel = (uint8_t)adv_current_rx_entry[8 + len + 2];
-    packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
-    packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
+    if(len > 0)
+    {
+        /* set current entry status to pending */
+        entry->status = DATA_ENTRY_PENDING;
+        if(state == ADVERTISING) {
+            adv_current_rx_entry[8] = 0;
+            adv_current_rx_entry = entry->pNextEntry;
+        }
+        else {
+            slave_current_rx_entry[8] = 0;
+            slave_current_rx_entry = entry->pNextEntry;
+        }
+    }
+
+
     return len;
 }
 
 /*---------------------------------------------------------------------------*/
 void ble_controller_free_current_rx_buf()
 {
-    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *)adv_current_rx_entry;
-
-    /* clear the length*/
-    adv_current_rx_entry[8] = 0;
-
-    /* set status to pending */
-    entry->status = DATA_ENTRY_PENDING;
-    adv_current_rx_entry = entry->pNextEntry;
-}
-/*---------------------------------------------------------------------------*/
-unsigned short get_current_rx_entry_pdu_type(void)
-{
-    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) adv_current_rx_entry;
-
-    if(entry->status != DATA_ENTRY_FINISHED)
+    rfc_dataEntryGeneral_t *entry;
+    if(state == ADVERTISING)
     {
-        return 0;
+        PRINTF("ble_controller_free_current_rx_buf() ADV\n");
+        entry = (rfc_dataEntryGeneral_t *)adv_current_rx_entry;
+        /* clear the length*/
+        adv_current_rx_entry[8] = 0;
+
+        /* set status to pending */
+        entry->status = DATA_ENTRY_PENDING;
+        adv_current_rx_entry = entry->pNextEntry;
+    }
+    else
+    {
+        PRINTF("ble_controller_free_current_rx_buf() DATA\n");
+        entry = (rfc_dataEntryGeneral_t *)slave_current_rx_entry;
+        /* clear the length*/
+        slave_current_rx_entry[8] = 0;
+
+        /* set status to pending */
+        entry->status = DATA_ENTRY_PENDING;
+        slave_current_rx_entry = entry->pNextEntry;
     }
 
-    return (adv_current_rx_entry[9] & 0x0F);   // the header is in the 9th element of the receive buffer
+
 }
 
 /*---------------------------------------------------------------------------*/
@@ -550,38 +598,49 @@ unsigned short parse_connect_request_data()
     memcpy(&data_channel_map, &adv_current_rx_entry[data_offset + 16], 5);
     hops = (adv_current_rx_entry[data_offset + 21] & 0x01F);
     sca = (adv_current_rx_entry[data_offset + 21] >> 5) & 0x07;
-    conn_req_timestamp = (adv_current_rx_entry[data_offset + 25] << 24) + (adv_current_rx_entry[data_offset + 24] << 16) +
-            (adv_current_rx_entry[data_offset + 23] << 8) + (adv_current_rx_entry[data_offset + 22]);
+    conn_req_timestamp_rf_ticks = (adv_current_rx_entry[data_offset + 27] << 24) + (adv_current_rx_entry[data_offset + 26] << 16) +
+            (adv_current_rx_entry[data_offset + 25] << 8) + (adv_current_rx_entry[data_offset + 24]);
     current_channel = hops;
     return BLE_COMMAND_SUCCESS;
 }
 
 /*---------------------------------------------------------------------------*/
-void create_slave_params(rfc_bleSlavePar_t *params)
+void create_slave_params(rfc_bleSlavePar_t *params, uint8_t first_packet, uint8_t transmit_data)
 {
     uint32_t timeout_time = win_size * 5000;
-    memset(params, 0x00, sizeof(BLE_PARAMS_BUFFER_LENGTH));
+    if(first_packet) {
+        memset(params, 0x00, sizeof(BLE_PARAMS_BUFFER_LENGTH));
+    }
     params->pRxQ = &slave_rx_data_queue;
-//    params->pTxQ = &slave_tx_data_queue;
-    params->pTxQ = NULL;
+
+    if(transmit_data > 0) {
+        // if slave command needs to transmit data, then add queue
+        params->pTxQ = &slave_tx_data_queue;
+    }
+    else {
+        // if no data needed, then send auto-acks
+        params->pTxQ = NULL;
+    }
     params->rxConfig.bAutoFlushIgnored = 0;
     params->rxConfig.bAutoFlushCrcErr = 0;
     params->rxConfig.bAutoFlushEmpty = 0;
     params->rxConfig.bIncludeLenByte = 1;
     params->rxConfig.bIncludeCrc = 0;
-    params->rxConfig.bAppendRssi = 0;
-    params->rxConfig.bAppendStatus = 0;
-    params->rxConfig.bAppendTimestamp = 1;
+    params->rxConfig.bAppendRssi = RX_CONFIG_INCLUDE_RSSI;
+    params->rxConfig.bAppendStatus = RX_CONFIG_INCLUDE_STATUS;
+    params->rxConfig.bAppendTimestamp = RX_CONFIG_INCLUDE_TIMESTAMP;
 
-    // set parameters for first packet according to TI Technical Reference Manual
-    params->seqStat.lastRxSn = 1;
-    params->seqStat.lastTxSn = 1;
-    params->seqStat.nextTxSn = 0;
-    params->seqStat.bFirstPkt = 1;
-    params->seqStat.bAutoEmpty = 0;
-    params->seqStat.bLlCtrlTx = 0;
-    params->seqStat.bLlCtrlAckRx = 0;
-    params->seqStat.bLlCtrlAckPending = 0;
+    if(first_packet > 0) {
+        // set parameters for first packet according to TI Technical Reference Manual
+        params->seqStat.lastRxSn = 1;
+        params->seqStat.lastTxSn = 1;
+        params->seqStat.nextTxSn = 0;
+        params->seqStat.bFirstPkt = 1;
+        params->seqStat.bAutoEmpty = 0;
+        params->seqStat.bLlCtrlTx = 0;
+        params->seqStat.bLlCtrlAckRx = 0;
+        params->seqStat.bLlCtrlAckPending = 0;
+    }
 
     params->maxNack = 0;
     params->maxPkt = 0;
@@ -604,20 +663,13 @@ uint8_t send_slave_command(rfc_bleRadioOp_t * cmd)
         print_command_status(cmd->status);
         return BLE_COMMAND_ERROR;
     }
-    PRINTF("send_slave_command() cmd->status: ");
-    print_cmdsta(cmd_status);
+//    if(rf_core_wait_cmd_done(cmd) != RF_CORE_CMD_OK) {
+//        PRINTF("send_advertisement() could not wait for cmd\n");
+//        print_command_status(cmd->status);
+//    }
+    PRINTF("send_slave_command() ");
     print_command_status(cmd->status);
     return BLE_COMMAND_SUCCESS;
-}
-
-unsigned short get_buffer_length(uint8_t *entry)
-{
-    rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) entry;
-    if(e->status != DATA_ENTRY_FINISHED)
-    {
-        return 0;
-    }
-    return 1;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -625,8 +677,9 @@ void print_data_queue_entry(uint8_t *entry)
 {
     int i = 0;
     /* length of the ble data entry */
-    /*(-4 bytes because the timestamp is appended after each packet into the BLE data*/
-    int len = entry[8] - 4;
+    /* decrease the length of ble data by rssi, status and timestamp, if included */
+    int len = entry[8] - (1 * RX_CONFIG_INCLUDE_RSSI) -
+            (1 * RX_CONFIG_INCLUDE_STATUS) - (4 * RX_CONFIG_INCLUDE_TIMESTAMP);
     int ble_offset = 9;
     rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) entry;
 
@@ -649,48 +702,79 @@ void print_data_queue_entry(uint8_t *entry)
     {
         PRINTF("0x%02X ", entry[i]);
     }
+
+    if(RX_CONFIG_INCLUDE_RSSI)
+    {
+        PRINTF("\nRSSI: %d", entry[i++]);
+    }
+    if(RX_CONFIG_INCLUDE_STATUS)
+    {
+        PRINTF("\nstatus: %d", entry[i++]);
+    }
     PRINTF("\n");
 }
 
+void conn_event()
+{
+    rfc_bleRadioOp_t *cmd = (rfc_bleRadioOp_t *) ble_slave_cmd_buf;
+    rfc_bleSlavePar_t *params = (rfc_bleSlavePar_t *) ble_slave_params_buf;
+    rfc_bleMasterSlaveOutput_t *output = (rfc_bleMasterSlaveOutput_t *) ble_slave_output_buf;
+
+    /* calculate the number of the upcoming connection event */
+    conn_event_number++;
+    if(conn_event_number >= 2)
+    {
+        return;
+    }
+    /* calculate the data channel of the upcoming connection event */
+    current_channel = (current_channel + hops) % 37;
+    /* calculate the anchor of the upcoming connection event */
+    next_anchor_rf_ticks = output->timeStamp + (conn_event_number * interval * 5000);
+
+    create_slave_params(params, 0, 0);
+    create_radio_cmd_timestamp(cmd, BLE_COMMAND_BUFFER_LENGTH, CMD_BLE_SLAVE,
+                               current_channel, (uint8_t *) params, (uint8_t *) output,
+                               next_anchor_rf_ticks);
+    send_slave_command(cmd);
+    rtimer_set(&conn_timer, RTIMER_NOW() + RTIMER_SECOND/128, 0, conn_event, NULL);
+}
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_controller_connection_process, ev, data)
 {
     rfc_bleRadioOp_t *cmd = (rfc_bleRadioOp_t *) ble_slave_cmd_buf;
     rfc_bleSlavePar_t *params = (rfc_bleSlavePar_t *) ble_slave_params_buf;
     rfc_bleMasterSlaveOutput_t *output = (rfc_bleMasterSlaveOutput_t *) ble_slave_output_buf;
-    uint32_t current_time;
 
     PROCESS_BEGIN();
     PRINTF("ble_controller_connection_process started\n");
 
     /* wait for a CONN REQ */
-    PROCESS_YIELD_UNTIL(ev == rf_core_event &&
+    PROCESS_YIELD_UNTIL(ev == rf_core_data_event &&
             RF_RADIO_OP_GET_STATUS(ble_adv_cmd_buf) == RF_CORE_RADIO_OP_STATUS_BLE_DONE_CONNECT);
-
+    state = CONNECTED;
     parse_connect_request_data();
-    create_slave_params(params);
+    create_slave_params(params, 1, 0);
     create_radio_cmd_timestamp(cmd, BLE_COMMAND_BUFFER_LENGTH, CMD_BLE_SLAVE,
                                hops, (uint8_t *) params, (uint8_t *) output,
-                               (conn_req_timestamp + (win_offset * 5000)));
+                               (conn_req_timestamp_rf_ticks + (win_offset * 5000)));
 
     /* send slave command to rf-core */
     send_slave_command(cmd);
+    /* wait for first connection event to be finished */
+    PROCESS_WAIT_UNTIL(ev == rf_core_data_event &&
+            cmd->status == RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK);
 
-    PRINTF("-----------------------------------------------------\n");
-    PRINTF("SLAVE stats\n");
-    PRINTF("access address: 0x%8lX\n", access_address);
-    PRINTF("crc_init_0:           0x%02X\n", crc_init_0);
-    PRINTF("crc_init_1:           0x%02X\n", crc_init_1);
-    PRINTF("crc_init_2:           0x%02X\n", crc_init_2);
-    PRINTF("channel:                %2d\n", hops);
-    PRINTF("interval:               %2d\n", interval);
-    print_data_queue_entry((uint8_t *)slave_current_rx_entry);
-    print_slave_output(ble_slave_output_buf);
-    print_slave_sequence_stats(ble_slave_params_buf);
-
+    /* after successfully exchanging packets, the following conditions are met: */
+    /* - the output.timestamp is valid and stores the anchor for all following connection events */
+    if(output->pktStatus.bTimeStampValid != 1)
+    {
+        PRINTF("ble_controller_connection_process no timestamp available\n");
+        PROCESS_EXIT();
+    }
 
     while(1)
     {
+//        rtimer_set(&conn_timer, RTIMER_NOW() + RTIMER_SECOND/32, 0, conn_event, NULL);
         PROCESS_YIELD();
     }
     PROCESS_END();
