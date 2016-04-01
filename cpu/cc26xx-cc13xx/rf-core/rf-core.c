@@ -82,10 +82,9 @@
 /*---------------------------------------------------------------------------*/
 /* RF interrupts */
 #define RX_FRAME_IRQ IRQ_RX_ENTRY_DONE
-//#define RX_FRAME_IRQ (IRQ_RX_ENTRY_DONE | IRQ_RX_OK | IRQ_RX_NOK | IRQ_RX_IGNORED | IRQ_RX_EMPTY | IRQ_RX_CTRL | IRQ_RX_CTRL_ACK)
-//#define RX_FRAME_IRQ (IRQ_RX_ENTRY_DONE | IRQ_RX_CTRL | IRQ_RX_CTRL_ACK)
 #define ERROR_IRQ    IRQ_INTERNAL_ERROR
 #define RX_NOK_IRQ   IRQ_RX_NOK
+#define TIMER_IRQ
 
 /* Those IRQs are enabled all the time */
 #if RF_CORE_DEBUG_CRC
@@ -96,6 +95,7 @@
 
 #define cc26xx_rf_cpe0_isr RFCCPE0IntHandler
 #define cc26xx_rf_cpe1_isr RFCCPE1IntHandler
+#define cc26xx_rf_hw_isr   RFCHardwareIntHandler
 /*---------------------------------------------------------------------------*/
 /* Remember the last Radio Op issued to the radio */
 static rfc_radioOp_t *last_radio_op = NULL;
@@ -104,8 +104,9 @@ static rfc_radioOp_t *last_radio_op = NULL;
 static const rf_core_primary_mode_t *primary_mode = NULL;
 /*---------------------------------------------------------------------------*/
 PROCESS(rf_core_process, "CC13xx / CC26xx RF driver");
-
-process_event_t rf_core_event;
+/*---------------------------------------------------------------------------*/
+process_event_t rf_core_data_event;
+process_event_t rf_core_timer_event;
 /*---------------------------------------------------------------------------*/
 #define RF_CORE_CLOCKS_MASK (RFC_PWR_PWMCLKEN_RFC_M | RFC_PWR_PWMCLKEN_CPE_M \
                              | RFC_PWR_PWMCLKEN_CPERAM_M)
@@ -236,8 +237,10 @@ rf_core_power_up()
 
   ti_lib_int_pend_clear(INT_RF_CPE0);
   ti_lib_int_pend_clear(INT_RF_CPE1);
+  ti_lib_int_pend_clear(INT_RF_HW);
   ti_lib_int_disable(INT_RF_CPE0);
   ti_lib_int_disable(INT_RF_CPE1);
+  ti_lib_int_disable(INT_RF_HW);
 
   /* Enable RF Core power domain */
   ti_lib_prcm_power_domain_on(PRCM_DOMAIN_RFCORE);
@@ -250,8 +253,11 @@ rf_core_power_up()
 
   HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0x0;
   HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIEN) = 0x0;
+  HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) = 0x0;
+  HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIEN) = 0x0;
   ti_lib_int_enable(INT_RF_CPE0);
   ti_lib_int_enable(INT_RF_CPE1);
+  ti_lib_int_enable(INT_RF_HW);
 
   if(!interrupts_disabled) {
     ti_lib_int_master_enable();
@@ -275,10 +281,13 @@ rf_core_power_down()
   bool interrupts_disabled = ti_lib_int_master_disable();
   ti_lib_int_disable(INT_RF_CPE0);
   ti_lib_int_disable(INT_RF_CPE1);
+  ti_lib_int_disable(INT_RF_HW);
 
   if(rf_core_is_accessible()) {
     HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0x0;
     HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIEN) = 0x0;
+    HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) = 0x0;
+    HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIEN) = 0x0;
 
     /* need to send FS_POWERDOWN or analog components will use power */
     fs_powerdown();
@@ -296,8 +305,10 @@ rf_core_power_down()
 
   ti_lib_int_pend_clear(INT_RF_CPE0);
   ti_lib_int_pend_clear(INT_RF_CPE1);
+  ti_lib_int_pend_clear(INT_RF_HW);
   ti_lib_int_enable(INT_RF_CPE0);
   ti_lib_int_enable(INT_RF_CPE1);
+  ti_lib_int_enable(INT_RF_HW);
   if(!interrupts_disabled) {
     ti_lib_int_master_enable();
   }
@@ -336,7 +347,6 @@ uint8_t
 rf_core_start_rat()
 {
   uint32_t cmd_status;
-
   /* Start radio timer (RAT) */
   if(rf_core_send_cmd(CMDR_DIR_CMD(CMD_START_RAT), &cmd_status)
      != RF_CORE_CMD_OK) {
@@ -347,6 +357,23 @@ rf_core_start_rat()
 
   return RF_CORE_CMD_OK;
 }
+/*---------------------------------------------------------------------------*/
+uint8_t rf_core_start_timer_comp(uint32_t time)
+{
+    uint32_t cmd_status;
+    rfc_CMD_SET_RAT_CMP_t cmd;
+
+    rf_core_init_radio_op((rfc_radioOp_t *)&cmd, sizeof(cmd), CMD_SET_RAT_CMP);
+    cmd.ratCh = RF_CORE_TIMER_INTERRUPT;
+    cmd.compareTime = (ratmr_t) time;
+
+    if(rf_core_send_cmd((uint32_t)&cmd, &cmd_status) != RF_CORE_CMD_OK) {
+        PRINTF("rf_core_start_timer_comp: CMDSTA=0x%08lx\n", cmd_status);
+        return RF_CORE_CMD_ERROR;
+    }
+    return RF_CORE_CMD_OK;
+}
+
 /*---------------------------------------------------------------------------*/
 uint8_t
 rf_core_boot()
@@ -393,10 +420,15 @@ rf_core_setup_interrupts()
   /* Clear interrupt flags, active low clear(?) */
   HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0x0;
 
+  /* Set timer channel 7 of rf core as HW interrupt */
+  HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIEN) = RFC_DBELL_RFHWIFG_RATCH7;
+
   ti_lib_int_pend_clear(INT_RF_CPE0);
   ti_lib_int_pend_clear(INT_RF_CPE1);
+  ti_lib_int_pend_clear(INT_RF_HW);
   ti_lib_int_enable(INT_RF_CPE0);
   ti_lib_int_enable(INT_RF_CPE1);
+  ti_lib_int_enable(INT_RF_HW);
 
   if(!interrupts_disabled) {
     ti_lib_int_master_enable();
@@ -467,7 +499,7 @@ PROCESS_THREAD(rf_core_process, ev, data)
 
   PROCESS_BEGIN();
   while(1) {
-    PROCESS_YIELD_UNTIL(ev == rf_core_event);
+    PROCESS_YIELD_UNTIL(ev == rf_core_data_event);
     do {
       watchdog_periodic();
       packetbuf_clear();
@@ -522,7 +554,7 @@ cc26xx_rf_cpe0_isr(void)
   if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) & RX_FRAME_IRQ) {
       /* Clear the RX_ENTRY_DONE interrupt flag */
       HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFF7FFFFF;
-      process_post(PROCESS_BROADCAST, rf_core_event, NULL);
+      process_post(PROCESS_BROADCAST, rf_core_data_event, NULL);
   }
 
   if(RF_CORE_DEBUG_CRC) {
@@ -542,6 +574,22 @@ cc26xx_rf_cpe0_isr(void)
   ti_lib_int_master_enable();
 
   ENERGEST_OFF(ENERGEST_TYPE_IRQ);
+}
+/*---------------------------------------------------------------------------*/
+void cc26xx_rf_hw_isr(void)
+{
+    ENERGEST_ON(ENERGEST_TYPE_IRQ);
+    ti_lib_int_master_disable();
+
+    if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) & RFC_DBELL_RFHWIFG_RATCH7) {
+        /* Clear the RAT channel 7 interrupt flag */
+        HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) = 0xFFF7FFFF;
+//        printf("HW interrupt: %lX\n", HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG));
+        process_post(PROCESS_BROADCAST, rf_core_timer_event, NULL);
+    }
+
+    ti_lib_int_master_enable();
+    ENERGEST_OFF(ENERGEST_TYPE_IRQ);
 }
 /*---------------------------------------------------------------------------*/
 /** @} */

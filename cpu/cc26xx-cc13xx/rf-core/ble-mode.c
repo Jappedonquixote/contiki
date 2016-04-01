@@ -88,9 +88,9 @@ static int
 radio_read(void *buf, unsigned short buf_len)
 {
     int len = 0;
-    PRINTF("ble-mode radio_read\n");
+//    PRINTF("ble-mode radio_read\n");
     len = ble_controller_read_current_rx_buf(buf, buf_len);
-//    PRINTF("ble-mode radio read() read %d bytes\n", len);
+    PRINTF("ble-mode radio read() read %d bytes\n", len);
     if(len > 0)
     {
         ble_controller_free_current_rx_buf();

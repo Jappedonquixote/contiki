@@ -123,7 +123,7 @@ static uint8_t rf_stats[16] = { 0 };
  * This macro can be used to e.g. return the status of a previously
  * initiated background operation, or of an immediate command
  */
-#define RF_RADIO_OP_GET_STATUS(a) (((rfc_radioOp_t *)a)->status)
+#define CMD_GET_STATUS(a) (((rfc_radioOp_t *)a)->status)
 /*---------------------------------------------------------------------------*/
 /* Special value returned by CMD_IEEE_CCA_REQ when an RSSI is not available */
 #define RF_CMD_CCA_REQ_RSSI_UNKNOWN     -128
@@ -252,7 +252,7 @@ rf_is_on(void)
     return 0;
   }
 
-  return RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf) == RF_CORE_RADIO_OP_STATUS_ACTIVE;
+  return CMD_GET_STATUS(cmd_ieee_rx_buf) == RF_CORE_RADIO_OP_STATUS_ACTIVE;
 }
 /*---------------------------------------------------------------------------*/
 /**
@@ -477,19 +477,19 @@ rf_cmd_ieee_rx()
 
   if(ret != RF_CORE_CMD_OK) {
     PRINTF("rf_cmd_ieee_rx: ret=%d, CMDSTA=0x%08lx, status=0x%04x\n",
-           ret, cmd_status, RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf));
+           ret, cmd_status, CMD_GET_STATUS(cmd_ieee_rx_buf));
     return RF_CORE_CMD_ERROR;
   }
 
   t0 = RTIMER_NOW();
 
-  while(RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf) != RF_CORE_RADIO_OP_STATUS_ACTIVE &&
+  while(CMD_GET_STATUS(cmd_ieee_rx_buf) != RF_CORE_RADIO_OP_STATUS_ACTIVE &&
         (RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + ENTER_RX_WAIT_TIMEOUT)));
 
   /* Wait to enter RX */
-  if(RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf) != RF_CORE_RADIO_OP_STATUS_ACTIVE) {
+  if(CMD_GET_STATUS(cmd_ieee_rx_buf) != RF_CORE_RADIO_OP_STATUS_ACTIVE) {
     PRINTF("rf_cmd_ieee_rx: CMDSTA=0x%08lx, status=0x%04x\n",
-           cmd_status, RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf));
+           cmd_status, CMD_GET_STATUS(cmd_ieee_rx_buf));
     return RF_CORE_CMD_ERROR;
   }
 
@@ -608,7 +608,7 @@ rx_on(void)
   /* Get status of running IEEE_RX (if any) */
   if(rf_is_on()) {
     PRINTF("rx_on: We were on. PD=%u, RX=0x%04x \n", rf_core_is_accessible(),
-           RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf));
+           CMD_GET_STATUS(cmd_ieee_rx_buf));
     return RF_CORE_CMD_OK;
   }
 
@@ -644,13 +644,13 @@ rx_off(void)
 
   while(rf_is_on());
 
-  if(RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf) == IEEE_DONE_STOPPED ||
-     RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf) == IEEE_DONE_ABORT) {
+  if(CMD_GET_STATUS(cmd_ieee_rx_buf) == IEEE_DONE_STOPPED ||
+     CMD_GET_STATUS(cmd_ieee_rx_buf) == IEEE_DONE_ABORT) {
     /* Stopped gracefully */
     ENERGEST_OFF(ENERGEST_TYPE_LISTEN);
     ret = RF_CORE_CMD_OK;
   } else {
-    PRINTF("RX off: BG status=0x%04x\n", RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf));
+    PRINTF("RX off: BG status=0x%04x\n", CMD_GET_STATUS(cmd_ieee_rx_buf));
     ret = RF_CORE_CMD_ERROR;
   }
 
@@ -1065,7 +1065,7 @@ on(void)
 
   if(rf_is_on()) {
     PRINTF("on: We were on. PD=%u, RX=0x%04x \n", rf_core_is_accessible(),
-           RF_RADIO_OP_GET_STATUS(cmd_ieee_rx_buf));
+           CMD_GET_STATUS(cmd_ieee_rx_buf));
     return RF_CORE_CMD_OK;
   }
 

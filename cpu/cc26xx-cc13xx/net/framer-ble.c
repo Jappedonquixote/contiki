@@ -40,7 +40,7 @@
 #include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -69,6 +69,8 @@ int create(void)
 int parse(void)
 {
     int hdr_len;
+    int i;
+    char *buf = packetbuf_dataptr();
     frame_ble_t frame;
     hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), &frame);
 

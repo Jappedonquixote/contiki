@@ -42,6 +42,6 @@
 
 //#define BLE_ADV_CHANNEL_MASK    (BLE_ADV_CHANNEL_1_MASK | BLE_ADV_CHANNEL_2_MASK | BLE_ADV_CHANNEL_3_MASK)
 #define BLE_ADV_CHANNEL_MASK    (BLE_ADV_CHANNEL_1_MASK)
-#define BLE_DEVICE_NAME         "TI SensorTag@ITI"
+#define BLE_DEVICE_NAME         "msp - TI SensorTag"
 
 #endif /* BLE_MAC_H_ */

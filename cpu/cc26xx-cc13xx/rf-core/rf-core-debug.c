@@ -59,70 +59,162 @@
 /*---------------------------------------------------------------------------*/
 void print_cmdsta(uint32_t cmdsta)
 {
-#if RESOLVE_STATUS_BYTES
-    PRINTF("CMDSTA: ");
-    switch(cmdsta & RF_CORE_CMDSTA_RESULT_MASK)
-    {
-        case RF_CORE_CMDSTA_PENDING:          PRINTF("PENDING"); break;
-        case RF_CORE_CMDSTA_DONE:             PRINTF("DONE"); break;
-        case RF_CORE_CMDSTA_ILLEGAL_PTR:      PRINTF("ILLEGAL_PTR"); break;
-        case RF_CORE_CMDSTA_UNKNOWN_CMD:      PRINTF("UNKNOWN_CMD"); break;
-        case RF_CORE_CMDSTA_UNKNOWN_DIR_CMD:  PRINTF("UNKWOWN_DIR_CMD"); break;
-        case RF_CORE_CMDSTA_CONTEXT_ERR:      PRINTF("CONTEXT_ERR"); break;
-        case RF_CORE_CMDSTA_SCHEDULING_ERR:   PRINTF("SCHEDULING_ERR"); break;
-        case RF_CORE_CMDSTA_PAR_ERR:          PRINTF("PAR_ERR"); break;
-        case RF_CORE_CMDSTA_QUEUE_ERR:        PRINTF("QUEUE_ERR"); break;
-        case RF_CORE_CMDSTA_QUEUE_BUSY:       PRINTF("QUEUE_BUSY"); break;
-        default:                              PRINTF("unknown");
+    uint8_t val = (uint8_t) (cmdsta & RF_CORE_CMDSTA_RESULT_MASK);
+
+    if(val == RF_CORE_CMDSTA_PENDING) {
+        PRINTF("CMDSTA: PENDING\n");
     }
-    PRINTF(" (0x%08lx)\n", cmdsta);
-#else
-    PRINTF("CMDSTA: 0x%08lx\n", cmdsta);
-#endif
+    else if(val == RF_CORE_CMDSTA_DONE) {
+        PRINTF("CMDSTA: DONE\n");
+    }
+    else if(val == RF_CORE_CMDSTA_ILLEGAL_PTR) {
+        PRINTF("CMDSTA: ILLEGAL_PTR\n");
+    }
+    else if(val == RF_CORE_CMDSTA_UNKNOWN_CMD) {
+        PRINTF("CMDSTA: UNKNOWN_CMD\n");
+    }
+    else if(val == RF_CORE_CMDSTA_UNKNOWN_DIR_CMD) {
+        PRINTF("CMDSTA: UNKNOWN_DIR_CMD\n");
+    }
+    else if(val == RF_CORE_CMDSTA_CONTEXT_ERR) {
+        PRINTF("CMDSTA: CONTEXT_ERR\n");
+    }
+    else if(val == RF_CORE_CMDSTA_SCHEDULING_ERR) {
+        PRINTF("CMDSTA: SCHEDULING_ERR\n");
+    }
+    else if(val == RF_CORE_CMDSTA_PAR_ERR) {
+        PRINTF("CMDSTA: PAR_ERR\n");
+    }
+    else if(val == RF_CORE_CMDSTA_QUEUE_ERR) {
+        PRINTF("CMDSTA: QUEUE_ERR\n");
+    }
+    else if(val == RF_CORE_CMDSTA_QUEUE_BUSY) {
+        PRINTF("CMDSTA: QUEUE_BUSY\n");
+    }
+    else {
+        PRINTF("CMDSTA: 0x%08lx\n", cmdsta);
+    }
 }
 /*---------------------------------------------------------------------------*/
 void print_command_status(uint16_t status_field)
 {
-#if RESOLVE_STATUS_BYTES
-    PRINTF("cmd->status: ");
-    switch(status_field)
+
+    if (status_field == RF_CORE_RADIO_OP_STATUS_IDLE)
     {
-      case RF_CORE_RADIO_OP_STATUS_IDLE:                  PRINTF("IDLE"); break;
-      case RF_CORE_RADIO_OP_STATUS_PENDING:               PRINTF("PENDING"); break;
-      case RF_CORE_RADIO_OP_STATUS_ACTIVE:                PRINTF("ACTIVE"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_PAST_START:      PRINTF("ERROR_PAST_START"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_START_TRIG:      PRINTF("ERROR_START_TRIG"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_CONDITION:       PRINTF("ERROR_CONDITION"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_PAR:             PRINTF("ERROR_PAR"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_POINTER:         PRINTF("ERROR_POINTER"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_CMDID:           PRINTF("ERROR_CMDID"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_NO_SETUP:        PRINTF("ERROR_NO_SETUP"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_NO_FS:           PRINTF("ERROR_NO_FS"); break;
-      case RF_CORE_RADIO_OP_STATUS_ERROR_SYNTH_PROG:      PRINTF("ERROR_SYNTH_PROG"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK:           PRINTF("BLE_DONE_OK"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_RXTIMEOUT:    PRINTF("BLE_DONE_RXTIMEOUT"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_NOSYNC:       PRINTF("BLE_DONE_NOSYNC"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_RXERR:        PRINTF("BLE_DONE_RXERR"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_CONNECT:      PRINTF("BLE_DONE_CONNECT"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_MAXNACK:      PRINTF("BLE_DONE_MAXNACK"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_ENDED:        PRINTF("BLE_DONE_ENDED"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_ABORT:        PRINTF("BLE_DONE_ABORT"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_DONE_STOPPED:      PRINTF("BLE_DONE_STOPPED"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_PAR:         PRINTF("BLE_ERROR_PAR"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_RXBUF:       PRINTF("BLE_ERROR_RXBUF"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_NO_SETUP:    PRINTF("BLE_ERROR_NO_SETUP"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_NO_FS:       PRINTF("BLE_ERROR_NO_FS"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_SYNTH_PROG:  PRINTF("BLE_ERROR_SYNTH_PROT"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_RXOVF:       PRINTF("BLE_ERROR_RXOVF"); break;
-      case RF_CORE_RADIO_OP_STATUS_BLE_ERROR_TXUNF:       PRINTF("BLE_ERROR_TXUNF"); break;
-      default:                                            PRINTF("unknown");
+        PRINTF("cmd->status: IDLE\n");
     }
-    PRINTF(" (0x%04x)\n", status_field);
-
-
-#else
-    PRINTF("CMDSTA: 0x%08lx, status: 0x%04x\n", cmd_status, status_field);
-#endif
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_PENDING)
+    {
+        PRINTF("cmd->status: PENDING\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ACTIVE)
+    {
+        PRINTF("cmd->status: ACTIVE\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_PAST_START)
+    {
+        PRINTF("cmd->status: ERROR_PAST_START\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_START_TRIG)
+    {
+        PRINTF("cmd->status: ERROR_START_TRIG\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_CONDITION)
+    {
+        PRINTF("cmd->status: ERROR_CONDITION\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_PAR)
+    {
+        PRINTF("cmd->status: ERROR_PAR\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_POINTER)
+    {
+        PRINTF("cmd->status: ERROR_POINTER\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_CMDID)
+    {
+        PRINTF("cmd->status: ERROR_CMDID\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_NO_SETUP)
+    {
+        PRINTF("cmd->status: ERROR_NO_SETUP\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_NO_FS)
+    {
+        PRINTF("cmd->status: ERROR_NO_FS\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_ERROR_SYNTH_PROG)
+    {
+        PRINTF("cmd->status: ERROR_SYNTH_PROG\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK)
+    {
+        PRINTF("cmd->status: BLE_DONE_OK\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_RXTIMEOUT)
+    {
+        PRINTF("cmd->status: BLE_DONE_RXTIMEOUT\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_NOSYNC)
+    {
+        PRINTF("cmd->status: BLE_DONE_NOSYNC\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_RXERR)
+    {
+        PRINTF("cmd->status: BLE_DONE_RXERR\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_CONNECT)
+    {
+        PRINTF("cmd->status: BLE_DONE_CONNECT\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_MAXNACK)
+    {
+        PRINTF("cmd->status: BLE_DONE_MAXNACK\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_ENDED)
+    {
+        PRINTF("cmd->status: BLE_DONE_ENDED\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_ABORT)
+    {
+        PRINTF("cmd->status: BLE_DONE_ABORT\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_DONE_STOPPED)
+    {
+        PRINTF("cmd->status: BLE_DONE_STOPPED\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_PAR)
+    {
+        PRINTF("cmd->status: BLE_ERROR_PAR\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_RXBUF)
+    {
+        PRINTF("cmd->status: BLE_ERROR_RXBUF\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_NO_SETUP)
+    {
+        PRINTF("cmd->status: BLE_ERROR_NO_SETUP\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_NO_FS)
+    {
+        PRINTF("cmd->status: BLE_ERROR_NO_FS\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_SYNTH_PROG)
+    {
+        PRINTF("cmd->status: BLE_ERROR_SYNTH_PROT\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_RXOVF)
+    {
+        PRINTF("cmd->status: BLE_ERROR_RXOVF\n");
+    }
+    else if (status_field == RF_CORE_RADIO_OP_STATUS_BLE_ERROR_TXUNF)
+    {
+        PRINTF("cmd->status: BLE_ERROR_TXUNF\n");
+    }
+    else
+    {
+        PRINTF("cmd->status: 0x%04X\n", status_field);
+    }
 }
 
 
@@ -164,3 +256,4 @@ void print_slave_sequence_stats(uint8_t *ble_slave_params_buf)
     PRINTF("seqStats.lastTxSn           %d\n", params->seqStat.lastTxSn);
     PRINTF("seqStats.nextTxSn           %d\n", params->seqStat.nextTxSn);
 }
+

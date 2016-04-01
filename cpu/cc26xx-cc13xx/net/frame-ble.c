@@ -35,6 +35,7 @@
  */
 
 #include "net/frame-ble.h"
+#include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
@@ -58,6 +59,16 @@ void print_frame(frame_ble_t *frame){
         PRINTF("RxAdd:          %d\n", frame->hdr.hdr_adv.rx_add);
         PRINTF("length:         %d\n", frame->hdr.hdr_adv.length);
     }
+    else
+    {
+        length = frame->hdr.hdr_data.length;
+        PRINTF("DATA_PDU:\n");
+        PRINTF("LLID:           %d\n", frame->hdr.hdr_data.llid);
+        PRINTF("NESN:           %d\n", frame->hdr.hdr_data.nesn);
+        PRINTF("SN:             %d\n", frame->hdr.hdr_data.sn);
+        PRINTF("MD:             %d\n", frame->hdr.hdr_data.md);
+        PRINTF("length:         %d\n", frame->hdr.hdr_data.length);
+    }
 
     PRINTF("payload:        ");
     for(i = 0; i < length; ++i)
@@ -73,16 +84,28 @@ void print_frame(frame_ble_t *frame){
  */
 int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
 {
-    // TODO implement check for PDU type
-    frame->frame_type = FRAME_BLE_TYPE_ADV_PDU;
-    frame->hdr.hdr_adv.pdu_type = data[0] & 0x0F;
-    frame->hdr.hdr_adv.tx_add = (data[0] & 0x40) >> 6;
-    frame->hdr.hdr_adv.rx_add = (data[0] & 0x80) >> 7;
-    frame->hdr.hdr_adv.length = data[1];
-    frame->payload = &data[2];
-
-#ifdef DEBUG
-    print_frame(frame);
-#endif
-    return 2;       // header length is 2 bytes
+    int channel = packetbuf_attr(PACKETBUF_ATTR_CHANNEL);
+    PRINTF("frame_ble_parse() channel: %d\n", channel);
+    if(channel > 36)
+    {
+        /* frame is advertising pdu */
+        frame->frame_type = FRAME_BLE_TYPE_ADV_PDU;
+        frame->hdr.hdr_adv.pdu_type = data[0] & 0x0F;
+        frame->hdr.hdr_adv.tx_add = (data[0] & 0x40) >> 6;
+        frame->hdr.hdr_adv.rx_add = (data[0] & 0x80) >> 7;
+        frame->hdr.hdr_adv.length = data[1];
+        frame->payload = &data[2];
+    }
+    else
+    {
+        frame->frame_type = FRAME_BLE_TYPE_DATA_PDU;
+        frame->hdr.hdr_data.llid = data[0] & 0x03;
+        frame->hdr.hdr_data.nesn = (data[0] & 0x04) >> 2;
+        frame->hdr.hdr_data.sn = (data[0] & 0x08) >> 3;
+        frame->hdr.hdr_data.md = (data[0] & 0x10) >> 4;
+        frame->hdr.hdr_data.length = data[1] & 0x1F;
+        frame->payload = &data[3];
+        print_frame(frame);
+    }
+    return sizeof(frame->hdr);
 }

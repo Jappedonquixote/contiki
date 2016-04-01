@@ -56,8 +56,8 @@
 #define BLE_CONN_INTERVAL_MIN               0x0006      /* 7.5 milliseconds*/
 #define BLE_CONN_INTERVAL_MAX               0x0C80      /* 4 seconds */
 /* choose the slave connection interval within the defined bounds */
-//#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0960      /* 3 seconds */
-#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0006
+#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0960      /* 3 seconds */
+//#define BLE_SLAVE_CONN_INTERVAL_MIN         0x0006
 #define BLE_SLAVE_CONN_INTERVAL_MAX         0x0C80      /* 4 seconds */
 
 #define BLE_CONN_SLAVE_LATENCY_MIN          0

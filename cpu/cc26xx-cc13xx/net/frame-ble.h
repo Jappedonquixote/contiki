@@ -62,23 +62,37 @@ typedef enum {
  */
 typedef struct {
     uint8_t pdu_type:4;     /* PDU type field (e.g. scan request, ...), see BLE specification */
-    uint8_t reserved:2;     /* reserved bits */
+//    uint8_t reserved:2;     /* reserved bits */
     uint8_t tx_add:1;       /* TxAdd, see BLE specification */
     uint8_t rx_add:1;       /* RxAdd, see BLE specification */
     uint8_t length;         /* advertising payload length */
 } frame_ble_adv_hdr_t;
 
 /*
+ * header of BLE data PDU
+ */
+typedef struct {
+    uint8_t llid:2;         /* packet indicator */
+    uint8_t nesn:1;         /* next expected sequence number */
+    uint8_t sn:1;           /* sequence number */
+    uint8_t md:1;           /* more data */
+//    uint8_t reserved:3;   /* reserved */
+    uint8_t length:5;       /* data payload length */
+//    uint8_t reserved:3;   /* reserved */
+} frame_ble_data_hdr_t;
+
+/*
  * BLE header
  */
 typedef union {
     frame_ble_adv_hdr_t hdr_adv;
+    frame_ble_data_hdr_t hdr_data;
 } frame_ble_hdr_t;
 
 typedef struct {
     frame_ble_type_t frame_type;
-    frame_ble_hdr_t hdr;        /* advertising PDU header */
-    uint8_t *payload;           /* advertising payload */
+    frame_ble_hdr_t hdr;        /* PDU header */
+    uint8_t *payload;           /* payload */
 } frame_ble_t;
 
 int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame);
