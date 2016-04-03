@@ -38,10 +38,5 @@
 #ifndef BLE_MAC_H_
 #define BLE_MAC_H_
 
-#include "rf-core/ble-stack/ble-controller.h"
-
-//#define BLE_ADV_CHANNEL_MASK    (BLE_ADV_CHANNEL_1_MASK | BLE_ADV_CHANNEL_2_MASK | BLE_ADV_CHANNEL_3_MASK)
-#define BLE_ADV_CHANNEL_MASK    (BLE_ADV_CHANNEL_1_MASK)
-#define BLE_DEVICE_NAME         "msp - TI SensorTag"
 
 #endif /* BLE_MAC_H_ */

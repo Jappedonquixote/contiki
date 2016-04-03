@@ -433,6 +433,8 @@ rf_core_setup_interrupts()
   if(!interrupts_disabled) {
     ti_lib_int_master_enable();
   }
+  rf_core_data_event = process_alloc_event();
+  rf_core_timer_event  = process_alloc_event();
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -584,8 +586,8 @@ void cc26xx_rf_hw_isr(void)
     if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) & RFC_DBELL_RFHWIFG_RATCH7) {
         /* Clear the RAT channel 7 interrupt flag */
         HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) = 0xFFF7FFFF;
-//        printf("HW interrupt: %lX\n", HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG));
         process_post(PROCESS_BROADCAST, rf_core_timer_event, NULL);
+        PRINTF("HW interrupt\n");
     }
 
     ti_lib_int_master_enable();

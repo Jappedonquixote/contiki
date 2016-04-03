@@ -29,20 +29,15 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * rf-core-debug.h
+ * ble-radio-controller.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_
-#define CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_
+#ifndef CPU_CC26XX_CC13XX_RF_CORE_BLE_STACK_BLE_RADIO_CONTROLLER_H_
+#define CPU_CC26XX_CC13XX_RF_CORE_BLE_STACK_BLE_RADIO_CONTROLLER_H_
 
-#include "contiki-conf.h"
+#define BLE_RADIO_CMD_OK    1
+#define BLE_RADIO_CMD_ERROR 0
 
-void print_cmdsta(uint32_t cmdsta);
-void print_command_status(uint16_t status_field);
-void print_data_queue_entry(uint8_t *entry);
-void print_slave_output(uint8_t *ble_slave_output_buf);
-void print_slave_sequence_stats(uint8_t *ble_slave_params_buf);
-
-#endif /* CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_ */
+#endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_STACK_BLE_RADIO_CONTROLLER_H_ */

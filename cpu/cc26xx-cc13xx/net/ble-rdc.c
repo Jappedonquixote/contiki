@@ -41,6 +41,8 @@
 
 #include "net/framer-ble.h"
 
+#include "rf-core/ble-stack/ble-radio-controller.h"
+
 #define DEBUG 0
 #if DEBUG
 #include <stdio.h>
@@ -84,7 +86,7 @@ static void input(void)
 static int on(void)
 {
     PRINTF("[ ble-rdc ] on()\n");
-    return NETSTACK_RADIO.on();
+    return 1;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -110,7 +112,7 @@ static unsigned short channel_check_interval(void)
 static void init(void)
 {
     PRINTF("[ ble-rdc ] init()\n");
-    on();
+    ble_radio_controller_init();
 }
 /*---------------------------------------------------------------------------*/
 const struct rdc_driver ble_rdc_driver = {
