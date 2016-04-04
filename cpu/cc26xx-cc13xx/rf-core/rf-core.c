@@ -587,7 +587,6 @@ void cc26xx_rf_hw_isr(void)
         /* Clear the RAT channel 7 interrupt flag */
         HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFHWIFG) = 0xFFF7FFFF;
         process_post(PROCESS_BROADCAST, rf_core_timer_event, NULL);
-        PRINTF("HW interrupt\n");
     }
 
     ti_lib_int_master_enable();

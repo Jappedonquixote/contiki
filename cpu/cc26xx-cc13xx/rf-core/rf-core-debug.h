@@ -39,10 +39,12 @@
 
 #include "contiki-conf.h"
 
+#include "api/ble_cmd.h"
+
 void print_cmdsta(uint32_t cmdsta);
 void print_command_status(uint16_t status_field);
 void print_data_queue_entry(uint8_t *entry);
-void print_slave_output(uint8_t *ble_slave_output_buf);
-void print_slave_sequence_stats(uint8_t *ble_slave_params_buf);
+void print_slave_output(rfc_bleMasterSlaveOutput_t *output);
+void print_slave_sequence_stats(rfc_bleSlavePar_t *params);
 
 #endif /* CPU_CC26XX_CC13XX_RF_CORE_RF_CORE_DEBUG_H_ */

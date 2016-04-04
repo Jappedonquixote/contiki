@@ -59,16 +59,13 @@
 #define PRINTF(...)
 #endif
 
-
-#define TIMESTAMP_LOCATION 0x40043004
-
 /* Defines the ticks, which the system CPU needs to wakeup before an
  * upcoming connection event anchor point */
-#define WAKEUP_BEFORE_ANCHOR_TICKS 16000     /* 4 ms */
+#define WAKEUP_BEFORE_ANCHOR_TICKS 80000     /* 20 ms */
 
 /* The radio core starts the slave operation START_BEFORE_ANCHOR_TICKS
  * before the real anchor point */
-#define START_BEFORE_ANCHOR_TICKS  8000     /* 2 ms */
+#define START_BEFORE_ANCHOR_TICKS  12000     /* 3 ms */
 
 /*---------------------------------------------------------------------------*/
 typedef struct default_ble_tx_power_s {
@@ -90,7 +87,6 @@ static uint32_t ble_overrides[] = {
   0x00456088, /* Adjust AGC reference level */
   0xFFFFFFFF, /* End of override list */
 };
-
 /*---------------------------------------------------------------------------*/
 /* BLE connection request data (timing values stored in rf-core ticks) */
 static uint32_t access_address;
@@ -107,6 +103,7 @@ static uint32_t conn_req_timestamp;
 static uint8_t current_channel;
 static uint32_t current_event_number;
 
+static uint8_t first_anchor_point_valid;
 static uint32_t first_anchor_point_ticks;
 static uint32_t current_anchor_point_ticks;
 static uint32_t next_anchor_point_ticks;
@@ -125,15 +122,12 @@ static uint8_t rx_buf_3[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
 static dataQueue_t rx_data_queue = { 0 };
 volatile static uint8_t *current_rx_entry;
 /*---------------------------------------------------------------------------*/
-typedef enum {
-    RADIO_STATUS_WAITING_FOR_CONN_REQ,
-    RADIO_STATUS_WAITING_FOR_FIRST_PACKET,
-    RADIO_STATUS_CONNECTED,
-    RADIO_STATUS_IDLE
-} ble_radio_controller_status_t;
-
-static ble_radio_controller_status_t status;
-
+/* TODO: remove the variables for timemeasuring*/
+#define TIMESTAMP_LOCATION 0x40043004
+#define READ_CURRENT_TIME(x) (memcpy(x, TIMESTAMP_LOCATION, 4))
+#define TICKS_TO_MS(x) ((x) / 4000)
+static uint32_t start_time;
+static uint32_t end_time;
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_radio_controller, "BLE/CC26xx process");
 /*---------------------------------------------------------------------------*/
@@ -369,6 +363,7 @@ uint8_t send_slave_command(rfc_CMD_BLE_SLAVE_t * cmd)
 PROCESS_THREAD(ble_radio_controller, ev, data)
 {
     ble_conn_req_data_t *conn_req_data;
+    uint32_t current_ticks;
 
     PROCESS_BEGIN();
     PRINTF("ble_radio_controller_process() started\n");
@@ -389,74 +384,85 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
             current_event_number = 0;
             current_channel = hop;
 
+            if(win_offset_ticks <= 60000)
+            {
+                /* in this case the first anchor point starts too early,
+                 * ignore the first conn event and start with the 2nd */
+                first_anchor_point_ticks = conn_req_timestamp + win_offset_ticks + interval_ticks;
+                current_channel = (current_channel + hop) % 37;
+            }
+            else
+            {
+                first_anchor_point_ticks = conn_req_timestamp + win_offset_ticks;
+            }
+
+            /* the first anchor point is currently only an approximation */
+            /* the exact value will be read from the first exchanged connection event */
+            first_anchor_point_valid = 0;
+
             create_slave_params(&slave_param, 1);
             create_slave_cmd(&slave_cmd, current_channel,
                              &slave_param, &slave_output,
-                             (conn_req_timestamp + win_offset_ticks - START_BEFORE_ANCHOR_TICKS));
+                             (first_anchor_point_ticks - START_BEFORE_ANCHOR_TICKS));
             send_slave_command(&slave_cmd);
 
-            next_anchor_point_ticks = conn_req_timestamp + win_offset_ticks;
-
+            next_anchor_point_ticks = first_anchor_point_ticks + interval_ticks;
             rf_core_start_timer_comp(next_anchor_point_ticks
                                      - WAKEUP_BEFORE_ANCHOR_TICKS);
         }
         if(ev == rf_core_timer_event)
         {
+            /* CONNECTION EVENT */
+            READ_CURRENT_TIME(&start_time);
+            /* calculate parameters for upcoming connection event */
             current_anchor_point_ticks = next_anchor_point_ticks;
             current_event_number++;
             current_channel = (current_channel + hop) % 37;
 
-            PRINTF("timer event; current_event_number: %4lu; current_ticks: %lu; current_channel: 0x%02X\n",
-                    current_event_number, current_anchor_point_ticks, current_channel);
+            memcpy(&current_ticks, TIMESTAMP_LOCATION, 4);
+            PRINTF("timer event: event_nr: %4lu; ap_valid: %d; anchor_point_ticks: %lu; curent_ticks: %lu; channel: 0x%02X\n",
+                    current_event_number, first_anchor_point_valid, current_anchor_point_ticks,
+                    current_ticks, current_channel);
 
-            next_anchor_point_ticks = current_anchor_point_ticks + interval_ticks;
+            print_command_status(slave_cmd.status);
+
+            /* create & send slave command for upcoming connection event */
+            create_slave_params(&slave_param, 0);
+            create_slave_cmd(&slave_cmd, current_channel,
+                             &slave_param, &slave_output,
+                             current_anchor_point_ticks - START_BEFORE_ANCHOR_TICKS);
+            send_slave_command(&slave_cmd);
+
+            /* calculate next anchor point & setup timer interrupt */
+            next_anchor_point_ticks = first_anchor_point_ticks +
+                                      (interval_ticks * (current_event_number + 1));
             rf_core_start_timer_comp(next_anchor_point_ticks
                                      - WAKEUP_BEFORE_ANCHOR_TICKS);
+
+            if(current_event_number >= 10)
+            {
+                /* TODO: remove the statistics */
+                print_slave_output(&slave_output);
+                PROCESS_EXIT();
+            }
+            READ_CURRENT_TIME(&end_time);
+            PRINTF("timer event took: %lu ms\n", TICKS_TO_MS((end_time - start_time)));
         }
         if(ev == rf_core_data_event)
         {
-//            PRINTF("data event; timestampValid: %d\n", slave_output.pktStatus.bTimeStampValid);
+            if((!first_anchor_point_valid) && (slave_output.pktStatus.bTimeStampValid))
+            {
+                /* the first anchor point is now the valid value from the 1st conn event */
+                first_anchor_point_valid = 1;
+                first_anchor_point_ticks = slave_output.timeStamp;
+                PRINTF("first_anchor_point_ticks: %lu\n", slave_output.timeStamp);
+            }
+            else
+            {
+                PRINTF("data event\n");
+            }
         }
     }
-
-//    /* wait for CONN REQ to be received */
-//    PROCESS_WAIT_EVENT_UNTIL(ev == conn_req_event && data != NULL);
-//    conn_req_data = (ble_conn_req_data_t *) data;
-//
-//    parse_conn_req_data(conn_req_data);
-//
-//    create_slave_params(&slave_param, 1);
-//    create_slave_cmd(&slave_cmd, hop, &slave_param, &slave_output, (conn_req_timestamp + win_offset_ticks - 8000));
-//    send_slave_command(&slave_cmd);
-//
-//
-//
-//    /* wait for the first connection event to be finished */
-//    PROCESS_WAIT_EVENT_UNTIL(ev == rf_core_data_event);
-//    /* after the first packet, the timestamp needs to be valid
-//     * it serves as calculation base for all future anchor points */
-//    if(!slave_output.pktStatus.bTimeStampValid)
-//    {
-//        PRINTF("first anchor point timestamp not valid\n");
-//        anchor_point_ticks = conn_req_timestamp + win_offset_ticks + interval_ticks;
-//    }
-//    else
-//    {
-//        anchor_point_ticks = slave_output.timeStamp + interval_ticks;
-//    }
-//
-//    rf_core_start_timer_comp(anchor_point_ticks - 4000);
-//
-//
-//    /* wait for the first connection event anchor point to be received */
-//    while(1)
-//    {
-//        PRINTF("waiting for timer event\n");
-//        PROCESS_WAIT_EVENT_UNTIL(ev == rf_core_timer_event);
-//        PRINTF("event\n");
-//        anchor_point_ticks += interval_ticks;
-//        rf_core_start_timer_comp(anchor_point_ticks - 4000);
-//    }
 
     PRINTF("ble_radio_controller_process() stopped\n");
     PROCESS_END();

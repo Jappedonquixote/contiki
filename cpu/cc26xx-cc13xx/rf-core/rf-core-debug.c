@@ -262,10 +262,8 @@ void print_data_queue_entry(uint8_t *entry)
 }
 
 /*---------------------------------------------------------------------------*/
-void print_slave_output(uint8_t *ble_slave_output_buf)
+void print_slave_output(rfc_bleMasterSlaveOutput_t *output)
 {
-    rfc_bleMasterSlaveOutput_t *output = (rfc_bleMasterSlaveOutput_t *) ble_slave_output_buf;
-
     PRINTF("slave output\n");
     PRINTF("nTx:                            %16d\n", output->nTx);
     PRINTF("nTxAck:                         %16d\n", output->nTxAck);
@@ -287,9 +285,8 @@ void print_slave_output(uint8_t *ble_slave_output_buf)
 }
 
 /*---------------------------------------------------------------------------*/
-void print_slave_sequence_stats(uint8_t *ble_slave_params_buf)
+void print_slave_sequence_stats(rfc_bleSlavePar_t *params)
 {
-    rfc_bleSlavePar_t *params = (rfc_bleSlavePar_t *) ble_slave_params_buf;
     PRINTF("seqStats.bAutoEmpty         %d\n", params->seqStat.bAutoEmpty);
     PRINTF("seqStats.bFirstPkt          %d\n", params->seqStat.bFirstPkt);
     PRINTF("seqStats.bLlCtrlAckPending  %d\n", params->seqStat.bLlCtrlAckPending);
