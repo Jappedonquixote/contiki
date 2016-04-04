@@ -43,7 +43,7 @@
 
 #include "rf-core/ble-stack/ble-radio-controller.h"
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -71,9 +71,9 @@ static void send_list(mac_callback_t sent_callback, void *ptr, struct rdc_buf_li
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
-//    int hdr_len;
-//    PRINTF("[ ble-rdc ] input()\n");
-//    hdr_len = NETSTACK_FRAMER.parse();
+    int hdr_len;
+    PRINTF("[ ble-rdc ] input()\n");
+    hdr_len = NETSTACK_FRAMER.parse();
 //    if(hdr_len < 0)
 //    {
 //        PRINTF("[ ble-rdc ] input() could not parse frame\n");

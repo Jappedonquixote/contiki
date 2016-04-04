@@ -45,6 +45,9 @@
 #include "dev/radio.h"
 #include "dev/oscillators.h"
 
+#include "net/netstack.h"
+#include "net/packetbuf.h"
+
 #include "rf-core/api/data_entry.h"
 #include "rf-core/api/ble_cmd.h"
 #include "rf-core/ble-stack/ble-addr.h"
@@ -275,17 +278,6 @@ void parse_conn_req_data(ble_conn_req_data_t *data)
     interval_ticks = (uint32_t) (data->interval * 5000);
     hop = data->hop;
     conn_req_timestamp = data->timestamp;
-
-//    PRINTF("ble_radio_controller: conn_req_data\n");
-//    PRINTF("access_address: 0x%16lX\n", access_address);
-//    PRINTF("crc_init_0:     0x%16X\n", crc_init_0);
-//    PRINTF("crc_init_1:     0x%16X\n", crc_init_1);
-//    PRINTF("crc_init_2:     0x%16X\n", crc_init_2);
-//    PRINTF("win_size:         %16lu\n", win_size_ticks);
-//    PRINTF("win_offset:       %16lu\n", win_offset_ticks);
-//    PRINTF("interval:         %16lu\n", interval_ticks);
-//    PRINTF("hop:              %16u\n", hop);
-//    PRINTF("timestamp:        %16lu\n", conn_req_timestamp);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -360,10 +352,53 @@ uint8_t send_slave_command(rfc_CMD_BLE_SLAVE_t * cmd)
 }
 
 /*---------------------------------------------------------------------------*/
+void process_current_rx_data_buf(void)
+{
+    uint8_t data_offset = 9;                     // start index of BLE data
+    uint8_t data_len;
+    uint8_t rssi;
+    uint8_t channel;
+
+    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
+    if(entry->status != DATA_ENTRY_FINISHED)
+    {
+        return;
+    }
+
+    /* clear the packetbuffer */
+    packetbuf_clear();
+
+    /* the rx buffer includes the ble data and appends 1 status byte,
+     * 1 rssi byte and 4 timestamp bytes
+     * we do not need the 6 appended bytes in the payload */
+    data_len = current_rx_entry[8] - 6;
+
+    if(data_len > 0)
+    {
+        /* copy payload in packetbuffer */
+        memcpy(packetbuf_dataptr(), &current_rx_entry[9], data_len);
+        rssi = current_rx_entry[data_offset + data_len];
+        channel = (current_rx_entry[data_offset + data_len + 1] & 0x1F);
+        packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
+        packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
+
+        packetbuf_set_datalen(data_len);
+        NETSTACK_RDC.input();
+    }
+
+    /* free current rx entry */
+    /* clear the length field */
+    current_rx_entry[8] = 0;
+    /* set status to pending */
+    entry->status = DATA_ENTRY_PENDING;
+    /* set next data queue entry */
+    current_rx_entry = entry->pNextEntry;
+}
+
+/*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_radio_controller, ev, data)
 {
     ble_conn_req_data_t *conn_req_data;
-    uint32_t current_ticks;
 
     PROCESS_BEGIN();
     PRINTF("ble_radio_controller_process() started\n");
@@ -419,12 +454,10 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
             current_event_number++;
             current_channel = (current_channel + hop) % 37;
 
-            memcpy(&current_ticks, TIMESTAMP_LOCATION, 4);
-            PRINTF("timer event: event_nr: %4lu; ap_valid: %d; anchor_point_ticks: %lu; curent_ticks: %lu; channel: 0x%02X\n",
-                    current_event_number, first_anchor_point_valid, current_anchor_point_ticks,
-                    current_ticks, current_channel);
-
-            print_command_status(slave_cmd.status);
+//            memcpy(&current_ticks, TIMESTAMP_LOCATION, 4);
+//            PRINTF("timer event: event_nr: %4lu; ap_valid: %d; anchor_point_ticks: %lu; current_ticks: %lu; channel: 0x%02X\n",
+//                    current_event_number, first_anchor_point_valid, current_anchor_point_ticks,
+//                    current_ticks, current_channel);
 
             /* create & send slave command for upcoming connection event */
             create_slave_params(&slave_param, 0);
@@ -439,7 +472,7 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
             rf_core_start_timer_comp(next_anchor_point_ticks
                                      - WAKEUP_BEFORE_ANCHOR_TICKS);
 
-            if(current_event_number >= 10)
+            if(current_event_number >= 100)
             {
                 /* TODO: remove the statistics */
                 print_slave_output(&slave_output);
@@ -457,10 +490,8 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
                 first_anchor_point_ticks = slave_output.timeStamp;
                 PRINTF("first_anchor_point_ticks: %lu\n", slave_output.timeStamp);
             }
-            else
-            {
-                PRINTF("data event\n");
-            }
+            process_current_rx_data_buf();
+
         }
     }
 
