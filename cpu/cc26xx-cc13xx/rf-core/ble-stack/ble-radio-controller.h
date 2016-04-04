@@ -40,4 +40,6 @@
 #define BLE_RADIO_CMD_OK    1
 #define BLE_RADIO_CMD_ERROR 0
 
+unsigned short ble_radio_controller_init(void);
+
 #endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_STACK_BLE_RADIO_CONTROLLER_H_ */

@@ -345,7 +345,7 @@ void parse_connect_request_data(void)
 }
 
 /*---------------------------------------------------------------------------*/
-void process_current_rx_buf(void)
+void process_current_rx_adv_buf(void)
 {
     int pdu_offset = 9;                     // start index of BLE data
 
@@ -393,7 +393,7 @@ PROCESS_THREAD(ble_radio_advertising_process, ev, data)
     while(advertising)
     {
         PROCESS_WAIT_EVENT_UNTIL(ev == rf_core_data_event);
-        process_current_rx_buf();
+        process_current_rx_adv_buf();
 
         if(rx_adv_pdu_type == ADV_PDU_CONN_REQ)
         {

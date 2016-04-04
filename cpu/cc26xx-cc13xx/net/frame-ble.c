@@ -70,12 +70,15 @@ void print_frame(frame_ble_t *frame){
         PRINTF("length:         %d\n", frame->hdr.hdr_data.length);
     }
 
-    PRINTF("payload:        ");
-    for(i = 0; i < length; ++i)
+    if(length > 0)
     {
-        PRINTF("0x%02X ", frame->payload[i]);
+        PRINTF("payload:        ");
+        for(i = 0; i < length; ++i)
+        {
+            PRINTF("0x%02X ", frame->payload[i]);
+        }
+        PRINTF("\n");
     }
-    PRINTF("\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -85,7 +88,6 @@ void print_frame(frame_ble_t *frame){
 int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
 {
     int channel = packetbuf_attr(PACKETBUF_ATTR_CHANNEL);
-    PRINTF("frame_ble_parse() channel: %d\n", channel);
     if(channel > 36)
     {
         /* frame is advertising pdu */

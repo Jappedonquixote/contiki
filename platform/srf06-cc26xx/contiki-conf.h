@@ -100,7 +100,7 @@
 #define CONTIKIMAC_CONF_AFTER_ACK_DETECTECT_WAIT_TIME (RTIMER_SECOND / 1000)
 #define CONTIKIMAC_CONF_INTER_PACKET_INTERVAL     (RTIMER_SECOND / 250)
 #else
-#define NETSTACK_CONF_RADIO        ble_mode_driver
+#define NETSTACK_CONF_RADIO        nullradio_driver
 
 #ifndef RF_CORE_CONF_CHANNEL
 #define RF_CORE_CONF_CHANNEL                     25
