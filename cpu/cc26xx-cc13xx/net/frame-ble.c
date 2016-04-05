@@ -38,7 +38,7 @@
 #include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -88,6 +88,15 @@ void print_frame(frame_ble_t *frame){
 int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
 {
     int channel = packetbuf_attr(PACKETBUF_ATTR_CHANNEL);
+    memset(frame, 0x00, sizeof(frame_ble_t));
+
+    if(data_length < 2)
+    {
+        /* a valid BLE packet (adv and data) has at least a 2-byte header */
+        frame->frame_type = FRAME_BLE_TYPE_UNKNOWN;
+        frame->payload = NULL;
+        return 0;
+    }
     if(channel > 36)
     {
         /* frame is advertising pdu */
@@ -95,7 +104,8 @@ int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
         frame->hdr.hdr_adv.pdu_type = data[0] & 0x0F;
         frame->hdr.hdr_adv.tx_add = (data[0] & 0x40) >> 6;
         frame->hdr.hdr_adv.rx_add = (data[0] & 0x80) >> 7;
-        frame->hdr.hdr_adv.length = data[1];
+        /* the payload length cannot exceed the packetbuf len */
+        frame->hdr.hdr_adv.length = MIN(data[1], (data_length - 2));
         frame->payload = &data[2];
     }
     else
@@ -105,9 +115,9 @@ int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
         frame->hdr.hdr_data.nesn = (data[0] & 0x04) >> 2;
         frame->hdr.hdr_data.sn = (data[0] & 0x08) >> 3;
         frame->hdr.hdr_data.md = (data[0] & 0x10) >> 4;
-        frame->hdr.hdr_data.length = data[1] & 0x1F;
+        /* the payload length cannot exceed the packetbuf len */
+        frame->hdr.hdr_data.length = MIN((data[1] & 0x1F), (data_length - 2));
         frame->payload = &data[3];
-        print_frame(frame);
     }
     return sizeof(frame->hdr);
 }

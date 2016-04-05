@@ -53,6 +53,7 @@
  * Frame type of the current BLE frame.
  */
 typedef enum {
+    FRAME_BLE_TYPE_UNKNOWN,
     FRAME_BLE_TYPE_ADV_PDU,
     FRAME_BLE_TYPE_DATA_PDU
 } frame_ble_type_t;

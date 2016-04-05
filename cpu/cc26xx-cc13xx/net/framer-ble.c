@@ -51,11 +51,10 @@
 #define PRINTADDR(addr)
 #endif
 
-
 /*---------------------------------------------------------------------------*/
 int length(void)
 {
-
+    return 0;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -69,15 +68,10 @@ int create(void)
 int parse(void)
 {
     int hdr_len;
-    int i;
-    char *buf = packetbuf_dataptr();
     frame_ble_t frame;
     hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), &frame);
 
     if(hdr_len && packetbuf_hdrreduce(hdr_len)) {
-        if(frame.frame_type == FRAME_BLE_TYPE_ADV_PDU) {
-            packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, frame.hdr.hdr_adv.pdu_type);
-        }
         return hdr_len;
     }
     return FRAMER_FAILED;

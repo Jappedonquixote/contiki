@@ -56,9 +56,7 @@
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-    PRINTF("[ ble-rdc ] send()\n");
-    NETSTACK_RADIO.prepare(NULL, 0);
-    NETSTACK_RADIO.transmit(0);
+//    PRINTF("[ ble-rdc ] send()\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -72,14 +70,14 @@ static void send_list(mac_callback_t sent_callback, void *ptr, struct rdc_buf_li
 static void input(void)
 {
     int hdr_len;
-    PRINTF("[ ble-rdc ] input()\n");
+//    PRINTF("[ ble-rdc ] input()\n");
     hdr_len = NETSTACK_FRAMER.parse();
-//    if(hdr_len < 0)
-//    {
-//        PRINTF("[ ble-rdc ] input() could not parse frame\n");
-//        return;
-//    }
-//    NETSTACK_MAC.input();
+    if(hdr_len < 0)
+    {
+        PRINTF("[ ble-rdc ] input() could not parse frame\n");
+        return;
+    }
+    NETSTACK_MAC.input();
 }
 
 /*---------------------------------------------------------------------------*/

@@ -43,7 +43,7 @@
 #include <string.h>
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -60,14 +60,28 @@ static void init(void)
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-    PRINTF("[ ble-mac ] send()\n");
+//    PRINTF("[ ble-mac ] send()\n");
     NETSTACK_RDC.send(sent_callback, ptr);
 }
 
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
-    PRINTF("[ ble-mac ] input()\n");
+    uint8_t len = packetbuf_datalen();
+    uint8_t *buf = (uint8_t *) packetbuf_dataptr();
+    uint8_t i;
+
+//    PRINTF("[ ble-mac ] input()\n");
+
+    if(len > 0)
+    {
+        PRINTF("[ ble-mac ] BLE payload: ", len);
+        for(i = 0; i < len; i++)
+        {
+            PRINTF("0x%02X ", buf[i]);
+        }
+        PRINTF("(%u bytes)\n", len);
+    }
 }
 
 /*---------------------------------------------------------------------------*/
