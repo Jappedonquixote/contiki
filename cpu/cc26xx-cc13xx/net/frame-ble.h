@@ -41,6 +41,20 @@
 
 #include "rf-core/ble-stack/ble-addr.h"
 
+
+/*---------------------------------------------------------------------------*/
+/* Frame type of the current BLE frame.                                      */
+typedef enum {
+    FRAME_BLE_TYPE_UNKNOWN,     /* the frame type is unknown */
+    FRAME_BLE_TYPE_ADV_PDU,     /* advertising frame */
+    FRAME_BLE_TYPE_DATA_PDU     /* data frame */
+} frame_ble_type_t;
+
+
+/*---------------------------------------------------------------------------*/
+/* ADVERTISING CHANNEL PDU                                                   */
+/*---------------------------------------------------------------------------*/
+/* Types of advertising PDU frames                                           */
 #define FRAME_BLE_ADV_PDU_ADV_IND               0b0000
 #define FRAME_BLE_ADV_PDU_ADV_DIRECTED_IND      0b0001
 #define FRAME_BLE_ADV_PDU_ADV_NONCONN_IND       0b0010
@@ -48,19 +62,8 @@
 #define FRAME_BLE_ADV_PDU_SCAN_RSP              0b0100
 #define FRAME_BLE_ADV_PDU_CONNECT_REQ           0b0101
 #define FRAME_BLE_ADV_PDU_ADV_SCAN_IND          0b0110
-
-/*
- * Frame type of the current BLE frame.
- */
-typedef enum {
-    FRAME_BLE_TYPE_UNKNOWN,
-    FRAME_BLE_TYPE_ADV_PDU,
-    FRAME_BLE_TYPE_DATA_PDU
-} frame_ble_type_t;
-
-/*
- * header of BLE advertising PDU
- */
+/*---------------------------------------------------------------------------*/
+/* header of BLE advertising PDU                                             */
 typedef struct {
     uint8_t pdu_type:4;     /* PDU type field (e.g. scan request, ...), see BLE specification */
 //    uint8_t reserved:2;     /* reserved bits */
@@ -69,9 +72,40 @@ typedef struct {
     uint8_t length;         /* advertising payload length */
 } frame_ble_adv_hdr_t;
 
-/*
- * header of BLE data PDU
- */
+
+/*---------------------------------------------------------------------------*/
+/* DATA CHANNEL PDU                                                          */
+/*---------------------------------------------------------------------------*/
+/* Types of advertising PDU frames                                           */
+#define FRAME_BLE_DATA_PDU_LLID_DATA_MESG         0b01
+#define FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT     0b10
+#define FRAME_BLE_DATA_PDU_LLID_CONTROL           0b11
+
+/*---------------------------------------------------------------------------*/
+/* Types of LL controll PDUs                                                 */
+#define FRAME_BLE_LL_CONN_UPDATE_REQ              0x00
+#define FRAME_BLE_LL_CHANNEL_MAP_REQ              0x01
+#define FRAME_BLE_LL_TERMINATE_IND                0x02
+#define FRAME_BLE_LL_ENC_REQ                      0x03
+#define FRAME_BLE_LL_ENC_RSP                      0x04
+#define FRAME_BLE_LL_START_ENC_REQ                0x05
+#define FRAME_BLE_LL_START_ENC_RSP                0x06
+#define FRAME_BLE_LL_UNKNOWN_RSP                  0x07
+#define FRAME_BLE_LL_FEATURE_REQ                  0x08
+#define FRAME_BLE_LL_FEATURE_RSP                  0x09
+#define FRAME_BLE_LL_PAUSE_ENC_REQ                0x0A
+#define FRAME_BLE_LL_PAUSE_ENC_RSP                0x0B
+#define FRAME_BLE_LL_VERSION_IND                  0x0C
+#define FRAME_BLE_LL_REJECT_IND                   0x0D
+#define FRAME_BLE_LL_SLAVE_FEATURE_REQ            0x0E
+#define FRAME_BLE_LL_CONN_PARAM_REQ               0x0F
+#define FRAME_BLE_LL_CONN_PARAM_RSP               0x10
+#define FRAME_BLE_LL_REJECT_IND_EXT               0x11
+#define FRAME_BLE_LL_PING_REQ                     0x12
+#define FRAME_BLE_LL_PING_RSP                     0x13
+
+/*---------------------------------------------------------------------------*/
+/* header of BLE data PDU                                                    */
 typedef struct {
     uint8_t llid:2;         /* packet indicator */
     uint8_t nesn:1;         /* next expected sequence number */
@@ -82,19 +116,23 @@ typedef struct {
 //    uint8_t reserved:3;   /* reserved */
 } frame_ble_data_hdr_t;
 
-/*
- * BLE header
- */
+/*---------------------------------------------------------------------------*/
+/* BLE FRAME                                                                 */
+/*---------------------------------------------------------------------------*/
+/* BLE header                                                                */
 typedef union {
     frame_ble_adv_hdr_t hdr_adv;
     frame_ble_data_hdr_t hdr_data;
 } frame_ble_hdr_t;
 
+/*---------------------------------------------------------------------------*/
+/* BLE frame                                                                 */
 typedef struct {
     frame_ble_type_t frame_type;
     frame_ble_hdr_t hdr;        /* PDU header */
     uint8_t *payload;           /* payload */
 } frame_ble_t;
+
 
 int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame);
 

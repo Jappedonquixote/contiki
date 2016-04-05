@@ -42,4 +42,6 @@
 
 unsigned short ble_radio_controller_init(void);
 
+void ble_radio_controller_send(const uint8_t *payload, uint8_t payload_len);
+
 #endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_STACK_BLE_RADIO_CONTROLLER_H_ */

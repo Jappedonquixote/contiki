@@ -75,7 +75,7 @@ static void input(void)
 
     if(len > 0)
     {
-        PRINTF("[ ble-mac ] BLE payload: ", len);
+        PRINTF("[ ble-mac ] BLE payload: ");
         for(i = 0; i < len; i++)
         {
             PRINTF("0x%02X ", buf[i]);

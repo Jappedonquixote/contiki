@@ -38,7 +38,7 @@
 #include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -117,7 +117,12 @@ int frame_ble_parse(uint8_t *data, int data_length, frame_ble_t *frame)
         frame->hdr.hdr_data.md = (data[0] & 0x10) >> 4;
         /* the payload length cannot exceed the packetbuf len */
         frame->hdr.hdr_data.length = MIN((data[1] & 0x1F), (data_length - 2));
-        frame->payload = &data[3];
+        frame->payload = &data[2];
+
+        if(frame->hdr.hdr_data.length > 0)
+        {
+            print_frame(frame);
+        }
     }
     return sizeof(frame->hdr);
 }

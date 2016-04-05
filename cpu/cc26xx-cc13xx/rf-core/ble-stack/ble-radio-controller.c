@@ -327,6 +327,7 @@ void create_slave_params(rfc_bleSlavePar_t *params, uint8_t first_packet)
     params->pRxQ = &rx_data_queue;
     if(data_to_transmit)
     {
+        data_to_transmit = 0;
         params->pTxQ = &tx_data_queue;
     }
     else
@@ -422,15 +423,15 @@ void process_current_rx_data_buf(void)
     /* set next data queue entry */
     current_rx_entry = entry->pNextEntry;
 }
-/*---------------------------------------------------------------------------*/
-void add_data_to_tx(void)
-{
-    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_tx_entry;
 
-    entry->length = 8;
-    current_tx_entry[8] = 0x02;
-    current_tx_entry[9] = 0xAA;
-    current_tx_entry[10] = 0xBB;
+/*---------------------------------------------------------------------------*/
+void ble_radio_controller_send(const uint8_t *payload, uint8_t payload_len)
+{
+    rfc_dataEntryGeneral_t * entry = (rfc_dataEntryGeneral_t *) current_tx_entry;
+    entry->length = payload_len;
+
+    /* specify the LLID of the data */
+    memcpy(&current_tx_entry[8], payload, payload_len);
 
     data_to_transmit = 1;
 }

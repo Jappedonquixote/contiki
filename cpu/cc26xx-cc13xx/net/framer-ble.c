@@ -63,18 +63,25 @@ int create(void)
     return FRAMER_FAILED;
 }
 
+/*---------------------------------------------------------------------------*/
+int framer_ble_parse_frame(frame_ble_t *frame)
+{
+    int hdr_len;
+
+    hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), frame);
+
+    if(hdr_len && packetbuf_hdrreduce(hdr_len))
+    {
+        return hdr_len;
+    }
+    return FRAMER_FAILED;
+}
 
 /*---------------------------------------------------------------------------*/
 int parse(void)
 {
-    int hdr_len;
     frame_ble_t frame;
-    hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), &frame);
-
-    if(hdr_len && packetbuf_hdrreduce(hdr_len)) {
-        return hdr_len;
-    }
-    return FRAMER_FAILED;
+    return framer_ble_parse_frame(&frame);
 }
 
 /*---------------------------------------------------------------------------*/

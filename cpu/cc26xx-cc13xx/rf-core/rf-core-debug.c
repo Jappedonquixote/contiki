@@ -41,7 +41,6 @@
 #include "api/ble_cmd.h"
 #include "api/common_cmd.h"
 #include "ble-stack/ble-addr.h"
-#include "ble-stack/ble-controller.h"
 #include "rf-core.h"
 #include "net/packetbuf.h"
 

@@ -40,6 +40,7 @@
 #include "net/netstack.h"
 
 #include "net/framer-ble.h"
+#include "net/frame-ble.h"
 
 #include "rf-core/ble-stack/ble-radio-controller.h"
 
@@ -67,17 +68,54 @@ static void send_list(mac_callback_t sent_callback, void *ptr, struct rdc_buf_li
 }
 
 /*---------------------------------------------------------------------------*/
+void process_llid_control_mesg(uint8_t *payload)
+{
+    uint8_t opcode = payload[0];
+    uint8_t response_data[26];
+    uint8_t response_len = 0;
+
+    PRINTF("[ ble-rdc ] input() control frame (opcode: 0x%0X) received\n",
+            opcode);
+
+    if(opcode == FRAME_BLE_LL_FEATURE_REQ)
+    {
+        /* set LLID control frame */
+        response_data[0] = 0x03;
+
+        /* set LLID opcode*/
+        response_data[1] = FRAME_BLE_LL_FEATURE_RSP;
+
+        /* set feature_set to 0 (no feature supported) */
+        memset(&response_data[2], 0x00, 8);
+
+        response_len = 10;
+        ble_radio_controller_send(response_data, response_len);
+    }
+}
+/*---------------------------------------------------------------------------*/
 static void input(void)
 {
-    int hdr_len;
-//    PRINTF("[ ble-rdc ] input()\n");
-    hdr_len = NETSTACK_FRAMER.parse();
+    uint8_t hdr_len;
+    frame_ble_t frame;
+
+
+    hdr_len = framer_ble_parse_frame(&frame);
     if(hdr_len < 0)
     {
         PRINTF("[ ble-rdc ] input() could not parse frame\n");
         return;
     }
-    NETSTACK_MAC.input();
+
+    if((frame.frame_type == FRAME_BLE_TYPE_DATA_PDU) &&
+       (frame.hdr.hdr_data.llid == FRAME_BLE_DATA_PDU_LLID_CONTROL))
+    {
+        /* received frame is a LL control frame */
+        process_llid_control_mesg(frame.payload);
+    }
+    else
+    {
+        NETSTACK_MAC.input();
+    }
 }
 
 /*---------------------------------------------------------------------------*/
