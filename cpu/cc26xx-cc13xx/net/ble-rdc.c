@@ -91,6 +91,24 @@ void process_llid_control_mesg(uint8_t *payload)
         response_len = 10;
         ble_radio_controller_send(response_data, response_len);
     }
+    else if(opcode == FRAME_BLE_LL_VERSION_IND)
+    {
+        /* set LLID control frame */
+        response_data[0] = 0x03;
+
+        /* set LLID opcode*/
+        response_data[1] = FRAME_BLE_LL_VERSION_IND;
+
+        // TODO: send the real version and company ID
+        response_data[2] = 0x06;
+        response_data[3] = 0x00;
+        response_data[4] = 0x0A;
+        response_data[5] = 0xFE;
+        response_data[6] = 0xCA;
+
+        response_len = 7;
+        ble_radio_controller_send(response_data, response_len);
+    }
 }
 /*---------------------------------------------------------------------------*/
 static void input(void)

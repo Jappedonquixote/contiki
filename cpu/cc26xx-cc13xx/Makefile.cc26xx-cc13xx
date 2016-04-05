@@ -75,7 +75,7 @@ CONTIKI_CPU_SOURCEFILES += slip-arch.c slip.c cc26xx-uart.c lpm.c
 CONTIKI_CPU_SOURCEFILES += gpio-interrupt.c oscillators.c
 CONTIKI_CPU_SOURCEFILES += rf-core.c rf-ble.c rf-core-debug.c
 CONTIKI_CPU_SOURCEFILES += ble-radio-controller.c ble-radio-advertising.c ble-rdc.c ble-mac.c ble-addr.c
-CONTIKI_CPU_SOURCEFILES += framer-ble.c frame-ble.c
+CONTIKI_CPU_SOURCEFILES += framer-ble.c frame-ble.c ble-l2cap.c
 
 DEBUG_IO_SOURCEFILES += dbg-printf.c dbg-snprintf.c dbg-sprintf.c strformat.c
 

@@ -40,6 +40,9 @@
 #include "net/netstack.h"
 #include "net/frame-ble.h"
 
+#include "net/ble-l2cap.h"
+#include "rf-core/ble-stack/ble-radio-controller.h"
+
 #include <string.h>
 
 /*---------------------------------------------------------------------------*/
@@ -65,22 +68,61 @@ static void send(mac_callback_t sent_callback, void *ptr)
 }
 
 /*---------------------------------------------------------------------------*/
+void process_l2cap_frame(ble_l2cap_frame_t *frame)
+{
+    uint8_t cmd_id;
+    ble_l2cap_frame_t rsp_frame;
+
+
+
+    uint8_t data[25];
+    uint8_t len;
+
+
+
+    if(frame->type == BLE_L2CAP_C_FRAME)
+    {
+        /* C-frame received */
+
+        // TODO: implement L2CAP connection functionality and push data onto packetbuf
+        /* set LLID control frame */
+        data[0] = 0x02;
+
+        data[1] = 0x0E;
+        data[2] = 0x00;
+        data[3] = 0x05;
+        data[4] = 0x00;
+        data[5] = BLE_L2CAP_CONN_RSP_CODE;
+        data[6] = frame->cmd.conn_req.cmd_id;
+        data[7] = 0x0A;
+        data[8] = 0x00;
+        data[9] = 0x69;
+        data[10] = 0x00;
+        data[11] = 0xFF;
+        data[12] = 0xFF;
+        data[13] = 0xE0;
+        data[14] = 0x00;
+        data[15] = 0x0A;
+        data[16] = 0x00;
+        data[17] = 0x00;
+        data[18] = 0x00;
+
+        len = 19;
+
+        ble_radio_controller_send(data, len);
+    }
+}
+
+/*---------------------------------------------------------------------------*/
 static void input(void)
 {
     uint8_t len = packetbuf_datalen();
-    uint8_t *buf = (uint8_t *) packetbuf_dataptr();
-    uint8_t i;
-
-//    PRINTF("[ ble-mac ] input()\n");
+    ble_l2cap_frame_t frame;
 
     if(len > 0)
     {
-        PRINTF("[ ble-mac ] BLE payload: ");
-        for(i = 0; i < len; i++)
-        {
-            PRINTF("0x%02X ", buf[i]);
-        }
-        PRINTF("(%u bytes)\n", len);
+        ble_l2cap_parse((uint8_t *) packetbuf_dataptr(), len, &frame);
+        process_l2cap_frame(&frame);
     }
 }
 

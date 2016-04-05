@@ -37,6 +37,8 @@
 #include "net/frame-ble.h"
 #include "net/packetbuf.h"
 
+#include <string.h>
+
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
 #if DEBUG

@@ -77,8 +77,8 @@ typedef struct {
 /* DATA CHANNEL PDU                                                          */
 /*---------------------------------------------------------------------------*/
 /* Types of advertising PDU frames                                           */
-#define FRAME_BLE_DATA_PDU_LLID_DATA_MESG         0b01
-#define FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT     0b10
+#define FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT     0b01
+#define FRAME_BLE_DATA_PDU_LLID_DATA_MESG         0b10
 #define FRAME_BLE_DATA_PDU_LLID_CONTROL           0b11
 
 /*---------------------------------------------------------------------------*/
