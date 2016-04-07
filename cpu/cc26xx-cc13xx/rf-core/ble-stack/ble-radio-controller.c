@@ -50,9 +50,13 @@
 
 #include "rf-core/api/data_entry.h"
 #include "rf-core/api/ble_cmd.h"
+#include "rf-core/api/common_cmd.h"
 #include "rf-core/ble-stack/ble-addr.h"
 #include "rf-core/rf-core.h"
 #include "rf-core/rf-core-debug.h"
+
+#include "lib/memb.h"
+#include "lib/list.h"
 
 #define DEBUG 1
 #if DEBUG
@@ -125,21 +129,27 @@ static uint8_t rx_buf_2[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
 static uint8_t rx_buf_3[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
 
 static dataQueue_t rx_data_queue = { 0 };
-volatile static uint8_t *current_rx_entry;
+static uint8_t *current_rx_entry;
 /*---------------------------------------------------------------------------*/
 /* slave command transmit buffer */
-static uint8_t tx_buf_0[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
+typedef struct {
+    rfc_dataEntry_t entry;
+    uint8_t data[BLE_RECEIVE_BUFFER_LENGTH];
+} tx_buffer_t;
 
 static dataQueue_t tx_data_queue = { 0 };
-volatile static uint8_t *current_tx_entry;
-volatile static uint8_t data_to_transmit = 0;
+
+/* a list of all currently used tx buffers                                   */
+LIST(tx_buffers_list);
+/* memory block for allocation of tx buffers                                 */
+MEMB(tx_buffers,tx_buffer_t, 4);
 /*---------------------------------------------------------------------------*/
 /* TODO: remove the variables for timemeasuring*/
-#define TIMESTAMP_LOCATION 0x40043004
-#define READ_CURRENT_TIME(x) (memcpy(x, TIMESTAMP_LOCATION, 4))
-#define TICKS_TO_MS(x) ((x) / 4000)
-static uint32_t start_time;
-static uint32_t end_time;
+//#define TIMESTAMP_LOCATION 0x40043004
+//#define READ_CURRENT_TIME(x) (memcpy(x, TIMESTAMP_LOCATION, 4))
+//#define TICKS_TO_MS(x) ((x) / 4000)
+//static uint32_t start_time;
+//static uint32_t end_time;
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_radio_controller, "BLE/CC26xx process");
 /*---------------------------------------------------------------------------*/
@@ -191,6 +201,9 @@ unsigned short setup_ble_mode(void)
 /*---------------------------------------------------------------------------*/
 void setup_slave_buffers(void)
 {
+    memb_init(&tx_buffers);
+    list_init(tx_buffers_list);
+
     memset(&slave_cmd, 0x00, sizeof(slave_cmd));
     memset(&slave_param, 0x00, sizeof(slave_param));
     memset(&slave_output, 0x00, sizeof(slave_output));
@@ -227,18 +240,6 @@ void setup_slave_buffers(void)
     entry->pNextEntry = rx_buf_0;
     entry->config.lenSz = 1;
     entry->length = sizeof(rx_buf_3) - 8;
-
-    /* TX buffer */
-    memset(tx_buf_0, 0x00, sizeof(tx_buf_0));
-
-    tx_data_queue.pCurrEntry = tx_buf_0;
-    tx_data_queue.pLastEntry = tx_buf_0;
-    current_tx_entry = tx_buf_0;
-
-    entry = (rfc_dataEntry_t *) tx_buf_0;
-    entry->pNextEntry = NULL;
-    entry->config.lenSz = 1;
-    entry->length = sizeof(tx_buf_0) - 8;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -325,15 +326,7 @@ void create_slave_params(rfc_bleSlavePar_t *params, uint8_t first_packet)
     uint32_t timeout_ticks = win_size_ticks + START_BEFORE_ANCHOR_TICKS;
 
     params->pRxQ = &rx_data_queue;
-    if(data_to_transmit)
-    {
-        data_to_transmit = 0;
-        params->pTxQ = &tx_data_queue;
-    }
-    else
-    {
-        params->pTxQ = NULL;
-    }
+    params->pTxQ = &tx_data_queue;
 
     params->rxConfig.bAutoFlushIgnored = 0;
     params->rxConfig.bAutoFlushCrcErr = 0;
@@ -427,13 +420,51 @@ void process_current_rx_data_buf(void)
 /*---------------------------------------------------------------------------*/
 void ble_radio_controller_send(const uint8_t *payload, uint8_t payload_len)
 {
-    rfc_dataEntryGeneral_t * entry = (rfc_dataEntryGeneral_t *) current_tx_entry;
-    entry->length = payload_len;
+    tx_buffer_t *buf;
+    uint32_t cmdsta;
 
-    /* specify the LLID of the data */
-    memcpy(&current_tx_entry[8], payload, payload_len);
+    /* allocate a tx_buf for the packet */
+    buf = memb_alloc(&tx_buffers);
+    if(buf == NULL)
+    {
+        PRINTF("ble_radio_controller_send: could not allocate buffer\n");
+        return;
+    }
+    list_add(tx_buffers_list, buf);
 
-    data_to_transmit = 1;
+    /* write payload to buf */
+    buf->entry.length = payload_len;
+    buf->entry.config.lenSz = 1;
+    buf->entry.pNextEntry = NULL;
+    memcpy(buf->data, payload, payload_len);
+
+    rfc_CMD_ADD_DATA_ENTRY_t cmd_add_buf;
+    cmd_add_buf.commandNo = CMD_ADD_DATA_ENTRY;
+    cmd_add_buf.pQueue = &tx_data_queue;
+    cmd_add_buf.pEntry = (uint8_t *) buf;
+
+    if(rf_core_send_cmd((uint32_t) &cmd_add_buf, &cmdsta) != RF_CORE_CMD_OK)
+    {
+        print_cmdsta(cmdsta);
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+void free_finished_tx_buffers(void)
+{
+    tx_buffer_t *buf = list_head(tx_buffers_list);
+
+    /* free all finished tx buffers */
+    while((buf != NULL) && (buf->entry.status == DATA_ENTRY_FINISHED))
+    {
+        /* free the buffer memory */
+        memb_free(&tx_buffers, buf);
+
+        /* remove buffer from buffer list */
+        list_pop(tx_buffers_list);
+
+        buf = list_head(tx_buffers_list);
+    }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -451,9 +482,7 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
         PROCESS_WAIT_EVENT();
         if(ev == conn_req_event)
         {
-            /* connection request data received */
-            PRINTF("conn req data received\n");
-
+            /* CONN REQ */
             /* parse conn req data */
             conn_req_data = (ble_conn_req_data_t *) data;
             parse_conn_req_data(conn_req_data);
@@ -494,7 +523,6 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
         if(ev == rf_core_timer_event)
         {
             /* CONNECTION EVENT */
-            READ_CURRENT_TIME(&start_time);
             /* calculate parameters for upcoming connection event */
             current_anchor_point_ticks = next_anchor_point_ticks;
             current_event_number++;
@@ -508,7 +536,7 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
             result = send_slave_command(&slave_cmd);
             if(result != BLE_RADIO_CMD_OK)
             {
-                PRINTF("ble-radio-controller: connection error; event-nr.: %d\n",
+                PRINTF("ble-radio-controller: connection error; event-nr.: %lu\n",
                        current_event_number);
                 PROCESS_EXIT();
             }
@@ -519,15 +547,7 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
             rf_core_start_timer_comp(next_anchor_point_ticks
                                      - WAKEUP_BEFORE_ANCHOR_TICKS);
 
-            if(current_event_number >= STOP_AT_X_EVENTS)
-            {
-                PRINTF("%d connection events parsed\n", STOP_AT_X_EVENTS);
-                /* TODO: remove the statistics */
-                print_slave_output(&slave_output);
-                PROCESS_EXIT();
-            }
-            READ_CURRENT_TIME(&end_time);
-//            PRINTF("timer event took: %lu ms\n", TICKS_TO_MS((end_time - start_time)));
+            free_finished_tx_buffers();
         }
         if(ev == rf_core_data_event)
         {
@@ -538,7 +558,6 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
                 first_anchor_point_ticks = slave_output.timeStamp;
             }
             process_current_rx_data_buf();
-
         }
     }
 

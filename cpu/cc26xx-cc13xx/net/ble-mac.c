@@ -40,7 +40,6 @@
 #include "net/netstack.h"
 #include "net/frame-ble.h"
 
-#include "net/ble-l2cap.h"
 #include "rf-core/ble-stack/ble-radio-controller.h"
 
 #include <string.h>
@@ -53,76 +52,149 @@
 #else
 #define PRINTF(...)
 #endif
+/*---------------------------------------------------------------------------*/
+#define BLE_MAC_L2CAP_SIGNAL_CHANNEL 0x0005
+#define BLE_MAC_L2CAP_FLOW_CHANNEL   0x0069
 
+#define BLE_MAC_L2CAP_CODE_CONN_REQ    0x14
+#define BLE_MAC_L2CAP_CODE_CONN_RSP    0x15
+
+#define BLE_MAC_L2CAP_NODE_MTU       0xFFFF
+#define BLE_MAC_L2CAP_NODE_MPS       0x00FF
+#define BLE_MAC_L2CAP_NODE_INIT_CREDITS  10
+
+/*---------------------------------------------------------------------------*/
+typedef struct {
+    uint16_t cid;
+    uint16_t mtu;
+    uint16_t mps;
+    uint16_t credits;
+} ble_mac_l2cap_channel_t;
+
+static ble_mac_l2cap_channel_t l2cap_router;
+static ble_mac_l2cap_channel_t l2cap_node;
+/*---------------------------------------------------------------------------*/
+void print_l2cap_channel(ble_mac_l2cap_channel_t channel)
+{
+    PRINTF("L2CAP channel information\n");
+    PRINTF("CID:    0x%04X\n", channel.cid);
+    PRINTF("MTU:     %5d\n", channel.mtu);
+    PRINTF("MPS:     %5d\n", channel.mps);
+    PRINTF("credits: %5d\n", channel.credits);
+}
 /*---------------------------------------------------------------------------*/
 static void init(void)
 {
     PRINTF("[ ble-mac ] init()\n");
+
+    /* initialize the l2cap channel information */
+    l2cap_node.cid = BLE_MAC_L2CAP_FLOW_CHANNEL;
+    l2cap_node.mtu = BLE_MAC_L2CAP_NODE_MTU;
+    l2cap_node.mps = BLE_MAC_L2CAP_NODE_MPS;
+    l2cap_node.credits = BLE_MAC_L2CAP_NODE_INIT_CREDITS;
 }
 
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
 //    PRINTF("[ ble-mac ] send()\n");
-    NETSTACK_RDC.send(sent_callback, ptr);
+//    NETSTACK_RDC.send(sent_callback, ptr);
 }
 
 /*---------------------------------------------------------------------------*/
-void process_l2cap_frame(ble_l2cap_frame_t *frame)
+void process_l2cap_conn_req(uint8_t *data)
 {
-    uint8_t cmd_id;
-    ble_l2cap_frame_t rsp_frame;
+    uint8_t identifier;
+    uint16_t len;
+    uint16_t le_psm;
+    uint8_t resp_data[26];
 
+    identifier = data[0];
+    memcpy(&len, &data[1], 2);
 
-
-    uint8_t data[25];
-    uint8_t len;
-
-
-
-    if(frame->type == BLE_L2CAP_C_FRAME)
+    if(len != 10)
     {
-        /* C-frame received */
+        PRINTF("process_l2cap_conn_req: invalid len: %d\n", len);
+        return;
+    }
 
-        // TODO: implement L2CAP connection functionality and push data onto packetbuf
-        /* set LLID control frame */
-        data[0] = 0x02;
+    /* parse L2CAP connection data */
+    memcpy(&le_psm, &data[3], 2);
+    memcpy(&l2cap_router.cid, &data[5], 2);
+    memcpy(&l2cap_router.mtu, &data[7], 2);
+    memcpy(&l2cap_router.mps, &data[9], 2);
+    memcpy(&l2cap_router.credits, &data[11], 2);
 
-        data[1] = 0x0E;
-        data[2] = 0x00;
-        data[3] = 0x05;
-        data[4] = 0x00;
-        data[5] = BLE_L2CAP_CONN_RSP_CODE;
-        data[6] = frame->cmd.conn_req.cmd_id;
-        data[7] = 0x0A;
-        data[8] = 0x00;
-        data[9] = 0x69;
-        data[10] = 0x00;
-        data[11] = 0xFF;
-        data[12] = 0xFF;
-        data[13] = 0xE0;
-        data[14] = 0x00;
-        data[15] = 0x0A;
-        data[16] = 0x00;
-        data[17] = 0x00;
-        data[18] = 0x00;
+    PRINTF("L2CAP connection request:\n");
+    print_l2cap_channel(l2cap_router);
 
-        len = 19;
+    /* create L2CAP connection response */
+    /* length */
+    resp_data[0] = 0x0E;
+    resp_data[1] = 0x00;
 
-        ble_radio_controller_send(data, len);
+    /* channel ID */
+    resp_data[2] = 0x05;
+    resp_data[3] = 0x00;
+
+    /* code */
+    resp_data[4] = BLE_MAC_L2CAP_CODE_CONN_RSP;
+
+    /* identifier */
+    resp_data[5] = identifier;
+
+    /* cmd length */
+    resp_data[6] = 0x0A;
+    resp_data[7] = 0x00;
+
+    /* node channel information */
+    memcpy(&resp_data[8], &l2cap_node.cid, 2);
+    memcpy(&resp_data[10], &l2cap_node.mtu, 2);
+    memcpy(&resp_data[12], &l2cap_node.mps, 2);
+    memcpy(&resp_data[14], &l2cap_node.credits, 2);
+
+    /* result */
+    memset(&resp_data[16], 0x00, 2);
+
+    packetbuf_copyfrom((void *) resp_data, 18);
+    NETSTACK_RDC.send(NULL, NULL);
+}
+/*---------------------------------------------------------------------------*/
+void process_l2cap_frame(uint8_t *data, uint8_t data_len)
+{
+    uint16_t len;
+    uint16_t channel_id;
+
+    if(data_len < 4)
+    {
+        PRINTF("process_l2cap_frame: illegal L2CAP frame len: %d\n", data_len);
+        /* a L2CAP frame has a minimum length of 4 */
+        return;
+    }
+
+    memcpy(&len, &data[0], 2);
+    memcpy(&channel_id, &data[2], 2);
+
+    PRINTF("process_l2cap_frame: len: %d; channel_id: 0x%04X\n", len, channel_id);
+
+    if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL)
+    {
+        if(data[4] == BLE_MAC_L2CAP_CODE_CONN_REQ)
+        {
+            process_l2cap_conn_req(&data[5]);
+        }
     }
 }
 
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
+    uint8_t *data = (uint8_t *) packetbuf_dataptr();
     uint8_t len = packetbuf_datalen();
-    ble_l2cap_frame_t frame;
 
     if(len > 0)
     {
-        ble_l2cap_parse((uint8_t *) packetbuf_dataptr(), len, &frame);
-        process_l2cap_frame(&frame);
+        process_l2cap_frame(data, len);
     }
 }
 

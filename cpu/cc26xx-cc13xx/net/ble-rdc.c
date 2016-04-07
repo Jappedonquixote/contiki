@@ -58,6 +58,13 @@
 static void send(mac_callback_t sent_callback, void *ptr)
 {
 //    PRINTF("[ ble-rdc ] send()\n");
+    if(NETSTACK_FRAMER.create() < 0)
+    {
+        PRINTF("ble-rdc: could not create frame\n");
+        return;
+    }
+
+    ble_radio_controller_send(packetbuf_hdrptr(), packetbuf_totlen());
 }
 
 /*---------------------------------------------------------------------------*/
@@ -74,11 +81,9 @@ void process_llid_control_mesg(uint8_t *payload)
     uint8_t response_data[26];
     uint8_t response_len = 0;
 
-    PRINTF("[ ble-rdc ] input() control frame (opcode: 0x%0X) received\n",
-            opcode);
-
     if(opcode == FRAME_BLE_LL_FEATURE_REQ)
     {
+        PRINTF("[ ble-rdc ] LL_FEATURE_REQ received\n");
         /* set LLID control frame */
         response_data[0] = 0x03;
 
@@ -93,6 +98,7 @@ void process_llid_control_mesg(uint8_t *payload)
     }
     else if(opcode == FRAME_BLE_LL_VERSION_IND)
     {
+        PRINTF("[ ble-rdc ] LL_VERSION_IND received\n");
         /* set LLID control frame */
         response_data[0] = 0x03;
 
@@ -108,6 +114,11 @@ void process_llid_control_mesg(uint8_t *payload)
 
         response_len = 7;
         ble_radio_controller_send(response_data, response_len);
+    }
+    else
+    {
+        PRINTF("[ ble-rdc ] input() control frame (opcode: 0x%0X) received\n",
+                opcode);
     }
 }
 /*---------------------------------------------------------------------------*/
@@ -132,6 +143,7 @@ static void input(void)
     }
     else
     {
+        /* LLID messages and fragments are handled in the mac layer */
         NETSTACK_MAC.input();
     }
 }

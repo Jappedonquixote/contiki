@@ -50,7 +50,10 @@
 #define PRINTF(...)
 #define PRINTADDR(addr)
 #endif
-
+/*---------------------------------------------------------------------------*/
+struct ble_hdr {
+    uint8_t data_pdu_type;
+};
 /*---------------------------------------------------------------------------*/
 int length(void)
 {
@@ -60,7 +63,16 @@ int length(void)
 /*---------------------------------------------------------------------------*/
 int create(void)
 {
-    return FRAMER_FAILED;
+    struct ble_hdr *hdr;
+    if(packetbuf_hdralloc(sizeof(struct ble_hdr)) == 0)
+    {
+        PRINTF("framer-ble: header is too large\n");
+        return FRAMER_FAILED;
+    }
+    hdr = packetbuf_hdrptr();
+    hdr->data_pdu_type = FRAME_BLE_DATA_PDU_LLID_DATA_MESG;
+
+    return sizeof(struct ble_hdr);
 }
 
 /*---------------------------------------------------------------------------*/
