@@ -70,7 +70,7 @@ int create(void)
         return FRAMER_FAILED;
     }
     hdr = packetbuf_hdrptr();
-    hdr->data_pdu_type = FRAME_BLE_DATA_PDU_LLID_DATA_MESG;
+    hdr->data_pdu_type = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
 
     return sizeof(struct ble_hdr);
 }
@@ -84,6 +84,7 @@ int framer_ble_parse_frame(frame_ble_t *frame)
 
     if(hdr_len && packetbuf_hdrreduce(hdr_len))
     {
+        packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, frame->frame_type);
         return hdr_len;
     }
     return FRAMER_FAILED;
@@ -93,7 +94,17 @@ int framer_ble_parse_frame(frame_ble_t *frame)
 int parse(void)
 {
     frame_ble_t frame;
-    return framer_ble_parse_frame(&frame);
+    int hdr_len;
+
+    hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), &frame);
+
+    if(hdr_len && packetbuf_hdrreduce(hdr_len))
+    {
+        packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, frame.frame_type);
+        PRINTF("FRAMER: parse: type: %d\n", frame.frame_type);
+        return hdr_len;
+    }
+    return FRAMER_FAILED;
 }
 
 /*---------------------------------------------------------------------------*/

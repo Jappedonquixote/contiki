@@ -40,8 +40,6 @@
 #include "net/mac/framer.h"
 #include "net/frame-ble.h"
 
-int framer_ble_parse_frame(frame_ble_t *frame);
-
 extern const struct framer framer_ble;
 
 #endif /* FRAMER_BLE_H_ */

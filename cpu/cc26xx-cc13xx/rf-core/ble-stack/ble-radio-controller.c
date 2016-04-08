@@ -123,10 +123,10 @@ static rfc_bleSlavePar_t slave_param;
 static rfc_bleMasterSlaveOutput_t slave_output;
 /*---------------------------------------------------------------------------*/
 /* slave command receive buffer */
-static uint8_t rx_buf_0[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
-static uint8_t rx_buf_1[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
-static uint8_t rx_buf_2[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
-static uint8_t rx_buf_3[BLE_RECEIVE_BUFFER_LENGTH] CC_ALIGN(4);
+static uint8_t rx_buf_0[BLE_RADIO_RX_BUF_LEN] CC_ALIGN(4);
+static uint8_t rx_buf_1[BLE_RADIO_RX_BUF_LEN] CC_ALIGN(4);
+static uint8_t rx_buf_2[BLE_RADIO_RX_BUF_LEN] CC_ALIGN(4);
+static uint8_t rx_buf_3[BLE_RADIO_RX_BUF_LEN] CC_ALIGN(4);
 
 static dataQueue_t rx_data_queue = { 0 };
 static uint8_t *current_rx_entry;
@@ -134,7 +134,7 @@ static uint8_t *current_rx_entry;
 /* slave command transmit buffer */
 typedef struct {
     rfc_dataEntry_t entry;
-    uint8_t data[BLE_RECEIVE_BUFFER_LENGTH];
+    uint8_t data[BLE_RADIO_TX_BUF_LEN];
 } tx_buffer_t;
 
 static dataQueue_t tx_data_queue = { 0 };
@@ -480,9 +480,9 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
     while(1)
     {
         PROCESS_WAIT_EVENT();
+        /* CONN REQ data received */
         if(ev == conn_req_event)
         {
-            /* CONN REQ */
             /* parse conn req data */
             conn_req_data = (ble_conn_req_data_t *) data;
             parse_conn_req_data(conn_req_data);
@@ -520,9 +520,9 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
             rf_core_start_timer_comp(next_anchor_point_ticks
                                      - WAKEUP_BEFORE_ANCHOR_TICKS);
         }
+        /* CONNECTION EVENT */
         if(ev == rf_core_timer_event)
         {
-            /* CONNECTION EVENT */
             /* calculate parameters for upcoming connection event */
             current_anchor_point_ticks = next_anchor_point_ticks;
             current_event_number++;
@@ -549,6 +549,7 @@ PROCESS_THREAD(ble_radio_controller, ev, data)
 
             free_finished_tx_buffers();
         }
+        /* RX data entry available */
         if(ev == rf_core_data_event)
         {
             if((!first_anchor_point_valid) && (slave_output.pktStatus.bTimeStampValid))

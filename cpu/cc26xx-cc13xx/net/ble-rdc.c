@@ -125,21 +125,18 @@ void process_llid_control_mesg(uint8_t *payload)
 static void input(void)
 {
     uint8_t hdr_len;
-    frame_ble_t frame;
 
-
-    hdr_len = framer_ble_parse_frame(&frame);
+    hdr_len = NETSTACK_CONF_FRAMER.parse();
     if(hdr_len < 0)
     {
         PRINTF("[ ble-rdc ] input() could not parse frame\n");
         return;
     }
 
-    if((frame.frame_type == FRAME_BLE_TYPE_DATA_PDU) &&
-       (frame.hdr.hdr_data.llid == FRAME_BLE_DATA_PDU_LLID_CONTROL))
+    if(packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE) == FRAME_BLE_TYPE_DATA_LL_CTRL)
     {
         /* received frame is a LL control frame */
-        process_llid_control_mesg(frame.payload);
+        process_llid_control_mesg(packetbuf_dataptr());
     }
     else
     {

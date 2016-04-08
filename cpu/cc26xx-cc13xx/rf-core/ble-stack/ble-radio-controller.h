@@ -40,6 +40,9 @@
 #define BLE_RADIO_CMD_OK    1
 #define BLE_RADIO_CMD_ERROR 0
 
+#define BLE_RADIO_RX_BUF_LEN 56
+#define BLE_RADIO_TX_BUF_LEN 27 + 1     // max payload len + LLID byte
+
 unsigned short ble_radio_controller_init(void);
 
 void ble_radio_controller_send(const uint8_t *payload, uint8_t payload_len);
