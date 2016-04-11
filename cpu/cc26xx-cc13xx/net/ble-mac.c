@@ -54,7 +54,7 @@
 #endif
 /*---------------------------------------------------------------------------*/
 #define BLE_MAC_L2CAP_SIGNAL_CHANNEL 0x0005
-#define BLE_MAC_L2CAP_FLOW_CHANNEL   0x00AA
+#define BLE_MAC_L2CAP_FLOW_CHANNEL   0xCAFE
 
 #define BLE_MAC_L2CAP_CODE_CONN_REQ    0x14
 #define BLE_MAC_L2CAP_CODE_CONN_RSP    0x15
@@ -190,6 +190,9 @@ void process_l2cap_msg(uint8_t *msg, uint8_t msg_len)
     }
     else if(channel_id == BLE_MAC_L2CAP_FLOW_CHANNEL) {
         PRINTF("process_l2cap_frame: flow channel message (%d bytes) received\n", len);
+
+        packetbuf_copyfrom(&msg[6], len);
+        NETSTACK_NETWORK.input();
     }
 }
 
