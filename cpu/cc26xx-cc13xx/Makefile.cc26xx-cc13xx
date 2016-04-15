@@ -62,7 +62,7 @@ endif
 CLEAN += symbols.c symbols.h *.d *.elf *.hex
 
 ### CPU-dependent directories
-CONTIKI_CPU_DIRS = . dev rf-core rf-core/api rf-core/ble-stack $(TI_XXWARE_STARTUP_DIR) net
+CONTIKI_CPU_DIRS = . dev rf-core rf-core/api rf-core/ble-controller $(TI_XXWARE_STARTUP_DIR) net
 
 ### Use the existing debug I/O in cpu/arm/common
 CONTIKI_CPU_DIRS += ../arm/common/dbg-io
@@ -73,9 +73,8 @@ CONTIKI_CPU_SOURCEFILES += contiki-watchdog.c
 CONTIKI_CPU_SOURCEFILES += putchar.c ieee-addr.c batmon-sensor.c
 CONTIKI_CPU_SOURCEFILES += slip-arch.c slip.c cc26xx-uart.c lpm.c
 CONTIKI_CPU_SOURCEFILES += gpio-interrupt.c oscillators.c
-CONTIKI_CPU_SOURCEFILES += rf-core.c rf-ble.c rf-core-debug.c
-CONTIKI_CPU_SOURCEFILES += ble-radio-controller.c ble-radio-advertising.c ble-rdc.c ble-mac.c ble-addr.c
-CONTIKI_CPU_SOURCEFILES += framer-ble.c frame-ble.c
+CONTIKI_CPU_SOURCEFILES += rf-core.c rf-ble.c
+CONTIKI_CPU_SOURCEFILES += ble-controller-cc26xx.c rf-ble-cmd.c ble-mac.c framer-ble.c frame-ble.c
 
 DEBUG_IO_SOURCEFILES += dbg-printf.c dbg-snprintf.c dbg-sprintf.c strformat.c
 

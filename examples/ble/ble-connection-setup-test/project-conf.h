@@ -12,7 +12,7 @@
 /* network stack settings */
 #define NETSTACK_CONF_WITH_IPV6               1
 #define NETSTACK_CONF_MAC				ble_mac_driver
-#define NETSTACK_CONF_RDC				ble_rdc_driver
+//#define NETSTACK_CONF_RDC				ble_rdc_driver
 #define NETSTACK_CONF_FRAMER            framer_ble
 /*---------------------------------------------------------------------------*/
 #endif /* PROJECT_CONF_H_ */

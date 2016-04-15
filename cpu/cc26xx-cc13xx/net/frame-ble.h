@@ -39,8 +39,6 @@
 
 #include "contiki-conf.h"
 
-#include "rf-core/ble-stack/ble-addr.h"
-
 
 /*---------------------------------------------------------------------------*/
 /* Frame type of the current BLE frame.                                      */

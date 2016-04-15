@@ -29,25 +29,16 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-addr.c
+ * ble-controller-cc26xx.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
+#ifndef CPU_CC26XX_CC13XX_DEV_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_H_
+#define CPU_CC26XX_CC13XX_DEV_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_H_
 
-#include "rf-core/ble-stack/ble-addr.h"
-#include "net/linkaddr.h"
+#include "ble-controller.h"
 
-#include <string.h>
+extern const struct ble_controller_driver ble_controller;
 
-
-ble_addr_t ble_node_addr;
-
-/*---------------------------------------------------------------------------*/
-void ble_addr_init()
-{
-    int i;
-    for(i = 0; i < BLE_ADDR_SIZE; ++i) {
-        ble_node_addr.addr[i] = ((uint8_t *)BLE_ADDR_LOCATION_PRIMARY)[i];
-    }
-}
+#endif /* CPU_CC26XX_CC13XX_DEV_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_H_ */

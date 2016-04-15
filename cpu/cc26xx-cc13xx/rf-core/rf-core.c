@@ -82,20 +82,22 @@
 /*---------------------------------------------------------------------------*/
 /* RF interrupts */
 #define RX_FRAME_IRQ IRQ_RX_ENTRY_DONE
+#define TX_FRAME_IRQ IRQ_TX_ENTRY_DONE
 #define ERROR_IRQ    IRQ_INTERNAL_ERROR
 #define RX_NOK_IRQ   IRQ_RX_NOK
-#define TIMER_IRQ
 
 /* Those IRQs are enabled all the time */
 #if RF_CORE_DEBUG_CRC
-#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | RX_NOK_IRQ)
+#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | RX_NOK_IRQ | TX_FRAME_IRQ)
 #else
-#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ)
+#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | TX_FRAME_IRQ)
 #endif
 
 #define cc26xx_rf_cpe0_isr RFCCPE0IntHandler
 #define cc26xx_rf_cpe1_isr RFCCPE1IntHandler
 #define cc26xx_rf_hw_isr   RFCHardwareIntHandler
+/*---------------------------------------------------------------------------*/
+#define TIMESTAMP_LOCATION 0x40043004
 /*---------------------------------------------------------------------------*/
 /* Remember the last Radio Op issued to the radio */
 static rfc_radioOp_t *last_radio_op = NULL;
@@ -105,7 +107,8 @@ static const rf_core_primary_mode_t *primary_mode = NULL;
 /*---------------------------------------------------------------------------*/
 PROCESS(rf_core_process, "CC13xx / CC26xx RF driver");
 /*---------------------------------------------------------------------------*/
-process_event_t rf_core_data_event;
+process_event_t rf_core_data_rx_event;
+process_event_t rf_core_data_tx_event;
 process_event_t rf_core_timer_event;
 /*---------------------------------------------------------------------------*/
 #define RF_CORE_CLOCKS_MASK (RFC_PWR_PWMCLKEN_RFC_M | RFC_PWR_PWMCLKEN_CPE_M \
@@ -357,6 +360,15 @@ rf_core_start_rat()
 
   return RF_CORE_CMD_OK;
 }
+
+/*---------------------------------------------------------------------------*/
+uint32_t rf_core_read_current_rf_ticks(void)
+{
+    uint32_t ticks;
+    memcpy(&ticks, (uint8_t *) TIMESTAMP_LOCATION, sizeof(uint32_t));
+    return ticks;
+}
+
 /*---------------------------------------------------------------------------*/
 uint8_t rf_core_start_timer_comp(uint32_t time)
 {
@@ -433,7 +445,8 @@ rf_core_setup_interrupts()
   if(!interrupts_disabled) {
     ti_lib_int_master_enable();
   }
-  rf_core_data_event = process_alloc_event();
+  rf_core_data_rx_event = process_alloc_event();
+  rf_core_data_tx_event = process_alloc_event();
   rf_core_timer_event  = process_alloc_event();
 }
 /*---------------------------------------------------------------------------*/
@@ -501,7 +514,7 @@ PROCESS_THREAD(rf_core_process, ev, data)
 
   PROCESS_BEGIN();
   while(1) {
-    PROCESS_YIELD_UNTIL(ev == rf_core_data_event);
+    PROCESS_YIELD_UNTIL(ev == rf_core_data_rx_event);
     do {
       watchdog_periodic();
       packetbuf_clear();
@@ -556,7 +569,13 @@ cc26xx_rf_cpe0_isr(void)
   if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) & RX_FRAME_IRQ) {
       /* Clear the RX_ENTRY_DONE interrupt flag */
       HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFF7FFFFF;
-      process_post(PROCESS_BROADCAST, rf_core_data_event, NULL);
+      process_post(PROCESS_BROADCAST, rf_core_data_rx_event, NULL);
+  }
+
+  if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) & TX_FRAME_IRQ) {
+      /* Clear the RX_ENTRY_DONE interrupt flag */
+      HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFFFFFBFF;
+      process_post(PROCESS_BROADCAST, rf_core_data_tx_event, NULL);
   }
 
   if(RF_CORE_DEBUG_CRC) {
@@ -566,6 +585,8 @@ cc26xx_rf_cpe0_isr(void)
       rx_nok_isr();
     }
   }
+
+
 
   if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) &
      (IRQ_LAST_FG_COMMAND_DONE | IRQ_LAST_COMMAND_DONE)) {

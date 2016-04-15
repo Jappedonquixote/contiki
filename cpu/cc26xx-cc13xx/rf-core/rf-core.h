@@ -240,8 +240,10 @@ typedef struct rf_core_primary_mode_s {
 /* Make the main driver process visible to mode drivers */
 PROCESS_NAME(rf_core_process);
 /*---------------------------------------------------------------------------*/
-/* Event triggered, when rf_core interrupt0 was triggered                    */
-extern process_event_t rf_core_data_event;
+/* Event triggered, when a finished rx entry is available                    */
+extern process_event_t rf_core_data_rx_event;
+/* Event triggered, when a finished tx entry is available                    */
+extern process_event_t rf_core_data_tx_event;
 /* Event triggered, when rf_core timer interrupt was received                */
 extern process_event_t rf_core_timer_event;
 /*---------------------------------------------------------------------------*/
@@ -323,6 +325,12 @@ uint8_t rf_core_set_modesel(void);
  * power up and before calling this function.
  */
 uint8_t rf_core_start_rat(void);
+
+/**
+ * \brief Reads the current rf ticks.
+ * \return current ticks of the rf core
+ */
+uint32_t rf_core_read_current_rf_ticks(void);
 
 /**
  * \brief Start compare mode of RAT channel
