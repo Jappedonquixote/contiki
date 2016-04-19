@@ -67,6 +67,16 @@
 #endif
 /*---------------------------------------------------------------------------*/
 /**
+ * \brief Returns the current status of a running Radio Op command
+ * \param a A pointer with the buffer used to initiate the command
+ * \return The value of the Radio Op buffer's status field
+ *
+ * This macro can be used to e.g. return the status of a previously
+ * initiated background operation, or of an immediate command
+ */
+#define CMD_GET_STATUS(a) (((rfc_radioOp_t *)a)->status)
+/*---------------------------------------------------------------------------*/
+/**
  * The location of the primary BLE device address (public BLE address)
  */
 #define BLE_ADDR_LOCATION   0x500012E8
@@ -104,7 +114,7 @@ static rf_ticks_t adv_event_next;
 /*---------------------------------------------------------------------------*/
 /* CONNECTION                                                                */
 #define CONN_EVENT_START_BEFORE_ANCHOR   4000   /* 1 ms */
-#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 12000   /* 3 ms*/
+#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 20000   /* 5 ms*/
 
 typedef struct {
     uint32_t access_address;
@@ -141,7 +151,6 @@ typedef struct {
 
 /* connection event data */
 static ble_conn_event_t conn_event;
-static uint8_t first_conn_event_anchor_valid;
 static rf_ticks_t first_conn_event_anchor;
 /*---------------------------------------------------------------------------*/
 /* RX data queue (all received packets are stored in the same queue)         */
@@ -152,7 +161,7 @@ static rf_ticks_t first_conn_event_anchor;
 static uint8_t rx_bufs[BLE_RX_NUM_BUF][BLE_RX_BUF_LEN] CC_ALIGN(4);
 
 static dataQueue_t rx_data_queue = { 0 };
-volatile static uint8_t *current_rx_entry;
+static uint8_t *current_rx_entry;
 /*---------------------------------------------------------------------------*/
 /* TX data queue (data channel packets are stored in the same queue)         */
 #define BLE_TX_BUF_OVERHEAD 8
@@ -420,8 +429,6 @@ static ble_result_t send()
     uint8_t *data = packetbuf_dataptr();
     uint8_t llid;
 
-    uint8_t i;
-
     /* allocate a TX buffer */
     buf = memb_alloc(&tx_buffers);
     if(buf == NULL) {
@@ -455,11 +462,6 @@ static ble_result_t send()
     memset(&buf->data[8], llid, 1);
     /* set the information payload */
     memcpy(&buf->data[9], data, len);
-
-//    for(i = 0; i < len + 9; i++) {
-//        PRINTF("0x%02X ", buf->data[i]);
-//    }
-//    PRINTF("send() llid type %d with %d bytes\n", llid, len);
 
     if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, buf->data) != RF_BLE_CMD_OK) {
         PRINTF("send() could not add buffer to tx data queue\n");
@@ -600,7 +602,8 @@ static void state_advertising(process_event_t ev, process_data_t data,
                     (uint8_t *) &current_rx_entry[23]);
 
             /* convert the timing values into rf core ticks */
-            conn_param.win_size = conn_param.win_size * 5000;
+            // TODO currently a safety factor of 2 is added, maybe this needs to be removed later on
+            conn_param.win_size = conn_param.win_size * 5000 * 2;
             conn_param.win_offset = conn_param.win_offset * 5000;
             conn_param.interval = conn_param.interval * 5000;
             conn_param.timeout = conn_param.timeout * 40000;
@@ -617,10 +620,6 @@ static void state_advertising(process_event_t ev, process_data_t data,
                 first_conn_event_anchor += conn_param.interval;
             }
             conn_event.start = first_conn_event_anchor;
-
-            /* the first anchor point is currently only an approximation */
-            /* the exact value will be read from the first exchanged connection event */
-            first_conn_event_anchor_valid = 0;
 
             rf_ble_cmd_create_slave_params(param, &rx_data_queue, &tx_data_queue,
                     conn_param.access_address, conn_param.crc_init_0,
@@ -660,16 +659,14 @@ static void process_rx_entry_data_channel(void)
         return;
     }
 
-    /* clear the packetbuffer */
-    packetbuf_clear();
-
     /* the last 6 bytes of the data are status and timestamp bytes */
     data_len = current_rx_entry[8] - 6;
 
     if(data_len > 0)
     {
+
         /* copy payload in packetbuffer */
-        memcpy(packetbuf_dataptr(), (uint8_t *) &current_rx_entry[9], data_len);
+        packetbuf_copyfrom(&current_rx_entry[9], data_len);
 
         /* set the controller dependent attributes */
         rssi = current_rx_entry[data_offset + data_len];
@@ -677,7 +674,6 @@ static void process_rx_entry_data_channel(void)
         packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
         packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
 
-        packetbuf_set_datalen(data_len);
         hdr_len = NETSTACK_CONF_FRAMER.parse();
 
         if(hdr_len < 0)
@@ -704,8 +700,13 @@ static void
 state_conn_slave(process_event_t ev, process_data_t data,
                               uint8_t *cmd, uint8_t *param, uint8_t *output)
 {
-    rfc_bleMasterSlaveOutput_t *o = (rfc_bleMasterSlaveOutput_t *) output;
     if(ev == rf_core_timer_event) {
+        if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
+            PRINTF("command status: 0x%04X; connection event counter: %d\n",
+                    CMD_GET_STATUS(cmd), conn_event.counter);
+            return;
+        }
+
         /* calculate parameters for upcoming connection event */
         conn_event.start = conn_event.next_start;
         conn_event.counter++;
@@ -734,11 +735,6 @@ state_conn_slave(process_event_t ev, process_data_t data,
             return;
         }
     } else if(ev == rf_core_data_rx_event) {
-        /* get the correct first anchor point of the connection */
-        if((!first_conn_event_anchor_valid) && (o->pktStatus.bTimeStampValid)) {
-            first_conn_event_anchor_valid = 1;
-            first_conn_event_anchor = o->timeStamp;
-        }
         process_rx_entry_data_channel();
         free_finished_rx_bufs();
 

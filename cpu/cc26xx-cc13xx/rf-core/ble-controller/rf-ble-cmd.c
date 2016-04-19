@@ -310,9 +310,9 @@ void rf_ble_cmd_create_adv_params(uint8_t *param, dataQueue_t *rx_queue,
     memset(p, 0x00, sizeof(rfc_bleAdvPar_t));
 
     p->pRxQ = rx_queue;
-    p->rxConfig.bAutoFlushIgnored = 0;
+    p->rxConfig.bAutoFlushIgnored = 1;
     p->rxConfig.bAutoFlushCrcErr = 0;
-    p->rxConfig.bAutoFlushEmpty = 0;
+    p->rxConfig.bAutoFlushEmpty = 1;
     p->rxConfig.bIncludeLenByte = 1;
     p->rxConfig.bIncludeCrc = 0;
     p->rxConfig.bAppendRssi = 1;
@@ -361,9 +361,9 @@ void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
 
     p->pRxQ = rx_queue;
     p->pTxQ = tx_queue;
-    p->rxConfig.bAutoFlushIgnored = 0;
+    p->rxConfig.bAutoFlushIgnored = 1;
     p->rxConfig.bAutoFlushCrcErr = 0;
-    p->rxConfig.bAutoFlushEmpty = 0;
+    p->rxConfig.bAutoFlushEmpty = 1;
     p->rxConfig.bIncludeLenByte = 1;
     p->rxConfig.bIncludeCrc = 0;
     p->rxConfig.bAppendRssi = 1;
