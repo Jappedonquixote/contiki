@@ -48,7 +48,12 @@
 
 #include "rf-core/api/data_entry.h"
 #include "rf-core/rf-core.h"
+#include "rf-core/api/ble_cmd.h"
 #include "rf-core/ble-controller/rf-ble-cmd.h"
+#include "rf-core/ble-controller/ble-controller-cc26xx-ll-ctrl.h"
+
+#include "lib/memb.h"
+#include "lib/list.h"
 
 #include <string.h>
 
@@ -136,6 +141,7 @@ typedef struct {
 
 /* connection event data */
 static ble_conn_event_t conn_event;
+static uint8_t first_conn_event_anchor_valid;
 static rf_ticks_t first_conn_event_anchor;
 /*---------------------------------------------------------------------------*/
 /* RX data queue (all received packets are stored in the same queue)         */
@@ -153,10 +159,16 @@ volatile static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_LEN      (BLE_CONTROLLER_DATA_BUF_SIZE + BLE_TX_BUF_OVERHEAD)
 #define BLE_TX_NUM_BUF      BLE_CONTROLLER_NUM_DATA_BUF
 
-static uint8_t tx_bufs[BLE_TX_NUM_BUF][BLE_TX_BUF_LEN] CC_ALIGN(4);
+typedef struct {
+    uint8_t data[BLE_TX_BUF_LEN] CC_ALIGN(4);
+} tx_buf_t;
 
 static dataQueue_t tx_data_queue = { 0 };
-volatile static uint8_t *current_tx_entry;
+
+/* list af all dynamically allocated tx buffers, which are used */
+LIST(tx_buffers_queued);
+/* memory block for allocation of tx buffers */
+MEMB(tx_buffers, tx_buf_t, BLE_TX_NUM_BUF);
 /*---------------------------------------------------------------------------*/
 typedef enum {
     BLE_CONTROLLER_STATE_STANDBY,
@@ -177,6 +189,8 @@ static ble_controller_state_t state = BLE_CONTROLLER_STATE_STANDBY;
 static uint8_t cmd_buf[RF_CMD_BUFFER_SIZE];
 /* buffer for all command parameters to the RF core */
 static uint8_t param_buf[RF_PARAM_BUFFER_SIZE];
+/* buffer for all command output */
+static uint8_t output_buf[RF_PARAM_BUFFER_SIZE];
 /*---------------------------------------------------------------------------*/
 /* LPM                                                                       */
 /*---------------------------------------------------------------------------*/
@@ -215,19 +229,9 @@ static void setup_buffers(void)
         entry->length = BLE_RX_BUF_LEN - BLE_RX_BUF_OVERHEAD;
     }
 
-    /* setup circular TX buffer */
-    tx_data_queue.pCurrEntry = tx_bufs[0];
-    tx_data_queue.pLastEntry = NULL;
-    current_tx_entry = tx_bufs[0];
-
-    /* initialize each individual tx buffer entry */
-    for(i = 0; i < BLE_TX_NUM_BUF; i++) {
-        memset(tx_bufs[i], 0x00, BLE_TX_BUF_LEN);
-        entry = (rfc_dataEntry_t *) tx_bufs[i];
-        entry->pNextEntry = tx_bufs[(i + 1) % BLE_TX_NUM_BUF];
-        entry->config.lenSz = 1;
-        entry->length = 0;
-    }
+    /* TX buffers are allocated on demand */
+    memb_init(&tx_buffers);
+    list_init(tx_buffers_queued);
 }
 /*---------------------------------------------------------------------------*/
 static ble_result_t reset(void)
@@ -347,7 +351,7 @@ static ble_result_t set_adv_enable(unsigned short enable)
 
         return BLE_RESULT_OK;
     }
-    return BLE_RESULT_ERROR;
+    return BLE_RESULT_NOT_SUPPORTED;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -407,7 +411,65 @@ static ble_result_t disconnect(unsigned int connection_handle,
 }
 
 /*---------------------------------------------------------------------------*/
-static ble_result_t queue_tx_data(unsigned short data_len, char *data)
+static ble_result_t send()
+{
+    tx_buf_t *buf;
+    rfc_dataEntryGeneral_t *e;
+    uint8_t len = packetbuf_datalen();
+    uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
+    uint8_t *data = packetbuf_dataptr();
+    uint8_t llid;
+
+    uint8_t i;
+
+    /* allocate a TX buffer */
+    buf = memb_alloc(&tx_buffers);
+    if(buf == NULL) {
+        PRINTF("send() could not allocate tx buffer\n");
+        return BLE_RESULT_ERROR;
+    }
+    list_add(tx_buffers_queued, buf);
+    e = (rfc_dataEntryGeneral_t *) buf;
+
+    /* include the frame type too */
+    e->length = len + 1;
+    e->config.lenSz = 1;
+    e->pNextEntry = NULL;
+
+    switch(type) {
+    case FRAME_BLE_TYPE_DATA_LL_CTRL:
+        llid = FRAME_BLE_DATA_PDU_LLID_CONTROL;
+        break;
+    case FRAME_BLE_TYPE_DATA_LL_MSG:
+        llid = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
+        break;
+    case FRAME_BLE_TYPE_DATA_LL_FRAG:
+        llid = FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT;
+        break;
+    default:
+        PRINTF("send() invalid frame type\n");
+        return BLE_RESULT_INVALID_PARAM;
+    }
+
+    /* set the frame type */
+    memset(&buf->data[8], llid, 1);
+    /* set the information payload */
+    memcpy(&buf->data[9], data, len);
+
+//    for(i = 0; i < len + 9; i++) {
+//        PRINTF("0x%02X ", buf->data[i]);
+//    }
+//    PRINTF("send() llid type %d with %d bytes\n", llid, len);
+
+    if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, buf->data) != RF_BLE_CMD_OK) {
+        PRINTF("send() could not add buffer to tx data queue\n");
+        return BLE_RESULT_ERROR;
+    }
+
+    return BLE_RESULT_OK;
+}
+/*---------------------------------------------------------------------------*/
+static ble_result_t send_list(struct ble_buf_list *list)
 {
     // TODO
     return BLE_RESULT_NOT_SUPPORTED;
@@ -430,10 +492,9 @@ const struct ble_controller_driver ble_controller =
     create_connection_cancel,
     connection_update,
     disconnect,
-    queue_tx_data
+    send,
+    send_list
 };
-
-
 /*---------------------------------------------------------------------------*/
 /* The parameter are parsed according to Bluetooth Specification v4 (page 2510)*/
 static void parse_connect_request_data(ble_conn_param_t *p, uint8_t *entry)
@@ -476,24 +537,23 @@ static void free_finished_rx_bufs(void)
 /*---------------------------------------------------------------------------*/
 static void free_finished_tx_bufs(void)
 {
-    rfc_dataEntryGeneral_t *entry;
+    tx_buf_t *buf = list_head(tx_buffers_queued);
+    rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) buf;
 
-    /* free finished TX entries */
-    entry = (rfc_dataEntryGeneral_t *) current_tx_entry;
-    while(entry->status == DATA_ENTRY_FINISHED) {
-        PRINTF("finished TX entry\n");
-        /* clear the length field */
-        current_tx_entry[8] = 0;
-        /* set status to pending */
-        entry->status = DATA_ENTRY_PENDING;
-        /* set next data queue entry */
-        current_tx_entry = entry->pNextEntry;
-        entry = (rfc_dataEntryGeneral_t *) current_tx_entry;
+    while((buf != NULL) && (e->status == DATA_ENTRY_FINISHED)) {
+        /* free memory block */
+        memb_free(&tx_buffers, buf);
+
+        /* remove from queued list */
+        list_pop(tx_buffers_queued);
+
+        buf = list_head(tx_buffers_queued);
+        e = (rfc_dataEntryGeneral_t *) buf;
     }
 }
 /*---------------------------------------------------------------------------*/
 static void state_advertising(process_event_t ev, process_data_t data,
-                              uint8_t *cmd, uint8_t *param)
+                              uint8_t *cmd, uint8_t *param, uint8_t *output)
 {
     rfc_dataEntryGeneral_t *entry;
 
@@ -504,17 +564,17 @@ static void state_advertising(process_event_t ev, process_data_t data,
                 adv_param.own_addr_type, (char *) BLE_ADDR_LOCATION);
 
         if (adv_param.channel_map & BLE_ADV_CHANNEL_1_MASK) {
-            rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_1, param, NULL);
+            rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_1, param, output);
             rf_ble_cmd_send(cmd);
             rf_ble_cmd_wait(cmd);
         }
         if (adv_param.channel_map & BLE_ADV_CHANNEL_2_MASK) {
-            rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_2, param, NULL);
+            rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_2, param, output);
             rf_ble_cmd_send(cmd);
             rf_ble_cmd_wait(cmd);
         }
         if (adv_param.channel_map & BLE_ADV_CHANNEL_3_MASK) {
-            rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_3, param, NULL);
+            rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_3, param, output);
             rf_ble_cmd_send(cmd);
             rf_ble_cmd_wait(cmd);
         }
@@ -558,13 +618,17 @@ static void state_advertising(process_event_t ev, process_data_t data,
             }
             conn_event.start = first_conn_event_anchor;
 
-            rf_ble_cmd_create_slave_params(param, &rx_data_queue, NULL,
+            /* the first anchor point is currently only an approximation */
+            /* the exact value will be read from the first exchanged connection event */
+            first_conn_event_anchor_valid = 0;
+
+            rf_ble_cmd_create_slave_params(param, &rx_data_queue, &tx_data_queue,
                     conn_param.access_address, conn_param.crc_init_0,
                     conn_param.crc_init_1, conn_param.crc_init_2,
                     conn_param.win_size, CONN_EVENT_START_BEFORE_ANCHOR, 1);
 
             rf_ble_cmd_create_slave_cmd(cmd, conn_event.channel, param,
-                    NULL, (conn_event.start - CONN_EVENT_START_BEFORE_ANCHOR));
+                    output, (conn_event.start - CONN_EVENT_START_BEFORE_ANCHOR));
 
             if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK)
             {
@@ -580,53 +644,7 @@ static void state_advertising(process_event_t ev, process_data_t data,
         free_finished_rx_bufs();
     }
 }
-/*---------------------------------------------------------------------------*/
-static void process_llid_control_mesg(uint8_t *payload)
-{
-    uint8_t opcode = payload[0];
-    uint8_t response_data[26];
-    uint8_t response_len = 0;
 
-    if(opcode == FRAME_BLE_LL_FEATURE_REQ)
-    {
-        PRINTF("LL_FEATURE_REQ received\n");
-        /* set LLID control frame */
-        response_data[0] = 0x03;
-
-        /* set LLID opcode*/
-        response_data[1] = FRAME_BLE_LL_FEATURE_RSP;
-
-        /* set feature_set to 0 (no feature supported) */
-        memset(&response_data[2], 0x00, 8);
-
-        response_len = 10;
-//        ble_radio_controller_send(response_data, response_len);
-    }
-    else if(opcode == FRAME_BLE_LL_VERSION_IND)
-    {
-        PRINTF("LL_VERSION_IND received\n");
-        /* set LLID control frame */
-        response_data[0] = 0x03;
-
-        /* set LLID opcode*/
-        response_data[1] = FRAME_BLE_LL_VERSION_IND;
-
-        // TODO: send the real version and company ID
-        response_data[2] = 0x06;
-        response_data[3] = 0x00;
-        response_data[4] = 0x0A;
-        response_data[5] = 0xFE;
-        response_data[6] = 0xCA;
-
-        response_len = 7;
-//        ble_radio_controller_send(response_data, response_len);
-    }
-    else
-    {
-        PRINTF("control frame (opcode: 0x%0X) received\n",
-                opcode);
-    }
-}
 /*---------------------------------------------------------------------------*/
 static void process_rx_entry_data_channel(void)
 {
@@ -671,7 +689,7 @@ static void process_rx_entry_data_channel(void)
         if(packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE) == FRAME_BLE_TYPE_DATA_LL_CTRL)
         {
             /* received frame is a LL control frame */
-            process_llid_control_mesg(packetbuf_dataptr());
+            ble_controller_ll_ctrl_parse_msg();
         }
         else
         {
@@ -684,29 +702,24 @@ static void process_rx_entry_data_channel(void)
 /*---------------------------------------------------------------------------*/
 static void
 state_conn_slave(process_event_t ev, process_data_t data,
-                              uint8_t *cmd, uint8_t *param)
+                              uint8_t *cmd, uint8_t *param, uint8_t *output)
 {
-    rfc_dataEntryGeneral_t *entry;
-    dataQueue_t *tx_queue = NULL;
-
+    rfc_bleMasterSlaveOutput_t *o = (rfc_bleMasterSlaveOutput_t *) output;
     if(ev == rf_core_timer_event) {
         /* calculate parameters for upcoming connection event */
         conn_event.start = conn_event.next_start;
         conn_event.counter++;
         conn_event.channel = (conn_event.channel + conn_param.hop) % 37;
 
-        /* check if tx packets or auto acks are transmitted */
-        entry = (rfc_dataEntryGeneral_t *) current_tx_entry;
-
         /* create & send slave command for upcoming connection event */
-        rf_ble_cmd_create_slave_params(param, &rx_data_queue, tx_queue,
+        rf_ble_cmd_create_slave_params(param, &rx_data_queue, &tx_data_queue,
                             conn_param.access_address, conn_param.crc_init_0,
                             conn_param.crc_init_1, conn_param.crc_init_2,
                             conn_param.win_size, CONN_EVENT_START_BEFORE_ANCHOR,
                             0);
 
         rf_ble_cmd_create_slave_cmd(cmd, conn_event.channel, param,
-                NULL, (conn_event.start - CONN_EVENT_START_BEFORE_ANCHOR));
+                output, (conn_event.start - CONN_EVENT_START_BEFORE_ANCHOR));
 
         if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK) {
             PRINTF("connection error; event counter: %u\n", conn_event.counter);
@@ -716,11 +729,19 @@ state_conn_slave(process_event_t ev, process_data_t data,
         /* calculate next anchor point & setup timer interrupt */
         conn_event.next_start = first_conn_event_anchor +
                 (conn_param.interval * (conn_event.counter + 1));
-        rf_core_start_timer_comp(conn_event.next_start -
-                CONN_EVENT_WAKEUP_BEFORE_ANCHOR);
+        if(rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR) != RF_CORE_CMD_OK ) {
+            PRINTF("timer error; event counter: %u\n", conn_event.counter);
+            return;
+        }
     } else if(ev == rf_core_data_rx_event) {
+        /* get the correct first anchor point of the connection */
+        if((!first_conn_event_anchor_valid) && (o->pktStatus.bTimeStampValid)) {
+            first_conn_event_anchor_valid = 1;
+            first_conn_event_anchor = o->timeStamp;
+        }
         process_rx_entry_data_channel();
         free_finished_rx_bufs();
+
     } else if(ev == rf_core_data_tx_event) {
         free_finished_tx_bufs();
     }
@@ -741,7 +762,7 @@ PROCESS_THREAD(ble_controller_process, ev, data)
             break;
         case BLE_CONTROLLER_STATE_ADVERTISING:
             state_advertising(ev, data, (uint8_t *) cmd_buf,
-                              (uint8_t *) param_buf);
+                              (uint8_t *) param_buf, (uint8_t *) output_buf);
             break;
         case BLE_CONTROLLER_STATE_SCANNING:
             // TODO
@@ -754,7 +775,7 @@ PROCESS_THREAD(ble_controller_process, ev, data)
             break;
         case BLE_CONTROLLER_STATE_CONN_SLAVE:
             state_conn_slave(ev, data, (uint8_t *) cmd_buf,
-                              (uint8_t *) param_buf);
+                              (uint8_t *) param_buf, (uint8_t *) output_buf);
             break;
         }
     }

@@ -38,6 +38,7 @@
 
 #include "net/packetbuf.h"
 #include "net/netstack.h"
+#include "net/frame-ble.h"
 
 #include "dev/ble-controller.h"
 #include "rf-core/ble-controller/ble-controller-cc26xx.h"
@@ -79,29 +80,29 @@ static ble_addr_t ble_addr;
 static unsigned int buffer_len;
 /* Number of buffers available at the BLE controller */
 static unsigned int num_buffer;
-///*---------------------------------------------------------------------------*/
-//static uint8_t l2cap_rx_buf[BLE_MAC_L2CAP_NODE_MTU];
-//static uint16_t l2cap_rx_index;
-//static uint16_t l2cap_rx_msg_len;
-///*---------------------------------------------------------------------------*/
-//typedef struct {
-//    uint16_t cid;
-//    uint16_t mtu;
-//    uint16_t mps;
-//    uint16_t credits;
-//} ble_mac_l2cap_channel_t;
-//
-//static ble_mac_l2cap_channel_t l2cap_router;
-//static ble_mac_l2cap_channel_t l2cap_node;
-///*---------------------------------------------------------------------------*/
-//void print_l2cap_channel(ble_mac_l2cap_channel_t channel)
-//{
-//    PRINTF("L2CAP channel information\n");
-//    PRINTF("CID:    0x%04X\n", channel.cid);
-//    PRINTF("MTU:     %5d\n", channel.mtu);
-//    PRINTF("MPS:     %5d\n", channel.mps);
-//    PRINTF("credits: %5d\n", channel.credits);
-//}
+/*---------------------------------------------------------------------------*/
+static uint8_t l2cap_rx_buf[BLE_MAC_L2CAP_NODE_MTU];
+static uint16_t l2cap_rx_index;
+static uint16_t l2cap_rx_msg_len;
+/*---------------------------------------------------------------------------*/
+typedef struct {
+    uint16_t cid;
+    uint16_t mtu;
+    uint16_t mps;
+    uint16_t credits;
+} ble_mac_l2cap_channel_t;
+
+static ble_mac_l2cap_channel_t l2cap_router;
+static ble_mac_l2cap_channel_t l2cap_node;
+/*---------------------------------------------------------------------------*/
+void print_l2cap_channel(ble_mac_l2cap_channel_t channel)
+{
+    PRINTF("L2CAP channel information\n");
+    PRINTF("CID:    0x%04X\n", channel.cid);
+    PRINTF("MTU:     %5d\n", channel.mtu);
+    PRINTF("MPS:     %5d\n", channel.mps);
+    PRINTF("credits: %5d\n", channel.credits);
+}
 /*---------------------------------------------------------------------------*/
 static uint8_t init_adv_data(char *adv_data)
 {
@@ -159,6 +160,11 @@ static void init(void)
 
     PRINTF("[ ble-mac ] init()\n");
 
+    l2cap_node.cid = BLE_MAC_L2CAP_FLOW_CHANNEL;
+    l2cap_node.credits = BLE_MAC_L2CAP_NODE_INIT_CREDITS;
+    l2cap_node.mps = BLE_MAC_L2CAP_NODE_MPS;
+    l2cap_node.mtu = BLE_MAC_L2CAP_NODE_MTU;
+
     /* Initialize the BLE controller */
     res = ble_controller.reset();
     if(res != BLE_RESULT_OK)
@@ -185,8 +191,6 @@ static void init(void)
     PRINTADDR(ble_addr);
     PRINTF("; buffer-len: %d; num-buffer: %d\n", buffer_len, num_buffer);
 
-
-    // TODO put somewhere else
     adv_data_len = init_adv_data(adv_data);
     scan_resp_data_len = init_scan_resp_data(scan_resp_data);
 
@@ -213,155 +217,156 @@ static void send(mac_callback_t sent_callback, void *ptr)
 //    NETSTACK_RDC.send(sent_callback, ptr);
 }
 
-///*---------------------------------------------------------------------------*/
-//void process_l2cap_conn_req(uint8_t *data)
-//{
-//    uint8_t identifier;
-//    uint16_t len;
-//    uint16_t le_psm;
-//    uint8_t resp_data[26];
-//
-//    identifier = data[0];
-//    memcpy(&len, &data[1], 2);
-//
-//    if(len != 10)
-//    {
-//        PRINTF("process_l2cap_conn_req: invalid len: %d\n", len);
-//        return;
-//    }
-//
-//    /* parse L2CAP connection data */
-//    memcpy(&le_psm, &data[3], 2);
-//    memcpy(&l2cap_router.cid, &data[5], 2);
-//    memcpy(&l2cap_router.mtu, &data[7], 2);
-//    memcpy(&l2cap_router.mps, &data[9], 2);
-//    memcpy(&l2cap_router.credits, &data[11], 2);
-//
+/*---------------------------------------------------------------------------*/
+void process_l2cap_conn_req(uint8_t *data)
+{
+    uint8_t identifier;
+    uint16_t len;
+    uint16_t le_psm;
+    uint8_t resp_data[26];
+
+    identifier = data[0];
+    memcpy(&len, &data[1], 2);
+
+    if(len != 10)
+    {
+        PRINTF("process_l2cap_conn_req: invalid len: %d\n", len);
+        return;
+    }
+
+    /* parse L2CAP connection data */
+    memcpy(&le_psm, &data[3], 2);
+    memcpy(&l2cap_router.cid, &data[5], 2);
+    memcpy(&l2cap_router.mtu, &data[7], 2);
+    memcpy(&l2cap_router.mps, &data[9], 2);
+    memcpy(&l2cap_router.credits, &data[11], 2);
+
 //    PRINTF("L2CAP connection request:\n");
 //    print_l2cap_channel(l2cap_router);
-//
-//    /* create L2CAP connection response */
-//    /* length */
-//    resp_data[0] = 0x0E;
-//    resp_data[1] = 0x00;
-//
-//    /* channel ID */
-//    resp_data[2] = 0x05;
-//    resp_data[3] = 0x00;
-//
-//    /* code */
-//    resp_data[4] = BLE_MAC_L2CAP_CODE_CONN_RSP;
-//
-//    /* identifier */
-//    resp_data[5] = identifier;
-//
-//    /* cmd length */
-//    resp_data[6] = 0x0A;
-//    resp_data[7] = 0x00;
-//
-//    /* node channel information */
-//    memcpy(&resp_data[8], &l2cap_node.cid, 2);
-//    memcpy(&resp_data[10], &l2cap_node.mtu, 2);
-//    memcpy(&resp_data[12], &l2cap_node.mps, 2);
-//    memcpy(&resp_data[14], &l2cap_node.credits, 2);
-//
-//    /* result */
-//    memset(&resp_data[16], 0x00, 2);
-//
-//    packetbuf_copyfrom((void *) resp_data, 18);
-//    NETSTACK_RDC.send(NULL, NULL);
-//}
-///*---------------------------------------------------------------------------*/
-//void process_l2cap_msg(uint8_t *msg, uint8_t msg_len)
-//{
-//    uint16_t len;
-//    uint16_t channel_id;
-//
-//    memcpy(&len, &msg[0], 2);
-//    memcpy(&channel_id, &msg[2], 2);
-//
-//    if(msg_len != (len + BLE_MAC_L2CAP_HEADER_SIZE))
-//    {
-//        PRINTF("process_l2cap_msg: invalid length: msg_len: %d, len: %d\n",
-//               msg_len, len);
-//    }
-//
-//    if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL) {
-//        if(msg[4] == BLE_MAC_L2CAP_CODE_CONN_REQ) {
-//            process_l2cap_conn_req(&msg[5]);
-//        }
-//        else {
-//            PRINTF("process_l2cap_frame: unknown signal channel code: %d\n",
-//                    msg[4]);
-//        }
-//    }
-//    else if(channel_id == BLE_MAC_L2CAP_FLOW_CHANNEL) {
-//        PRINTF("process_l2cap_frame: flow channel message (%d bytes) received\n", len);
-//
-//        packetbuf_copyfrom(&msg[6], len);
-//        NETSTACK_NETWORK.input();
-//    }
-//}
-//
-///*---------------------------------------------------------------------------*/
-//void process_l2cap_frame(uint8_t *data, uint8_t data_len)
-//{
-//    uint16_t len;
-//    uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
-//
-//    if(data_len < 4)
-//    {
-//        PRINTF("process_l2cap_frame: illegal L2CAP frame data_len: %d\n", data_len);
-//        /* a L2CAP frame has a minimum length of 4 */
-//        return;
-//    }
-//
-//    memcpy(&len, &data[0], 2);
-//    if(type == FRAME_BLE_TYPE_DATA_LL_MSG)
-//    {
-//        /* a complete or the start of a L2CAP message */
-//        if(len >= BLE_MAC_L2CAP_NODE_MPS)
-//        {
-//            /* start of fragmented L2CAP message */
-//            /* include the L2CAP header into the buffer */
-//            l2cap_rx_msg_len = len + BLE_MAC_L2CAP_HEADER_SIZE;
-//
-//            /* reinit L2CAP buffer */
-//            memset(l2cap_rx_buf, 0x00, BLE_MAC_L2CAP_NODE_MTU);
-//            l2cap_rx_index = 0;
-//
-//            /* copy message start into L2CAP buffer */
-//            memcpy(l2cap_rx_buf, &data[0], data_len);
-//            l2cap_rx_index = data_len - 1;
-//        }
-//        else
-//        {
-//            /* complete L2CAP message */
-//            process_l2cap_msg(data, data_len);
-//        }
-//    }
-//    else if(type == FRAME_BLE_TYPE_DATA_LL_FRAG)
-//    {
-//        memcpy(&l2cap_rx_buf[l2cap_rx_index], data, data_len);
-//        l2cap_rx_index += data_len;
-//
-//        if(l2cap_rx_index >= l2cap_rx_msg_len - 1)
-//        {
-//            process_l2cap_msg(l2cap_rx_buf, l2cap_rx_msg_len);
-//        }
-//    }
-//}
+
+    /* create L2CAP connection response */
+    /* length */
+    resp_data[0] = 0x0E;
+    resp_data[1] = 0x00;
+
+    /* channel ID */
+    resp_data[2] = 0x05;
+    resp_data[3] = 0x00;
+
+    /* code */
+    resp_data[4] = BLE_MAC_L2CAP_CODE_CONN_RSP;
+
+    /* identifier */
+    resp_data[5] = identifier;
+
+    /* cmd length */
+    resp_data[6] = 0x0A;
+    resp_data[7] = 0x00;
+
+    /* node channel information */
+    memcpy(&resp_data[8], &l2cap_node.cid, 2);
+    memcpy(&resp_data[10], &l2cap_node.mtu, 2);
+    memcpy(&resp_data[12], &l2cap_node.mps, 2);
+    memcpy(&resp_data[14], &l2cap_node.credits, 2);
+
+    /* result */
+    memset(&resp_data[16], 0x00, 2);
+
+    packetbuf_copyfrom((void *) resp_data, 18);
+    packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_MSG);
+    ble_controller.send();
+}
+/*---------------------------------------------------------------------------*/
+void process_l2cap_msg(uint8_t *msg, uint8_t msg_len)
+{
+    uint16_t len;
+    uint16_t channel_id;
+
+    memcpy(&len, &msg[0], 2);
+    memcpy(&channel_id, &msg[2], 2);
+
+    if(msg_len != (len + BLE_MAC_L2CAP_HEADER_SIZE))
+    {
+        PRINTF("process_l2cap_msg: invalid length: msg_len: %d, len: %d\n",
+               msg_len, len);
+    }
+
+    if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL) {
+        if(msg[4] == BLE_MAC_L2CAP_CODE_CONN_REQ) {
+            process_l2cap_conn_req(&msg[5]);
+        }
+        else {
+            PRINTF("process_l2cap_frame: unknown signal channel code: %d\n",
+                    msg[4]);
+        }
+    }
+    else if(channel_id == BLE_MAC_L2CAP_FLOW_CHANNEL) {
+        PRINTF("process_l2cap_frame: flow channel message (%d bytes) received\n", len);
+
+        packetbuf_copyfrom(&msg[6], len);
+        NETSTACK_NETWORK.input();
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+void process_l2cap_frame(uint8_t *data, uint8_t data_len)
+{
+    uint16_t len;
+    uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
+
+    if(data_len < 4)
+    {
+        PRINTF("process_l2cap_frame: illegal L2CAP frame data_len: %d\n", data_len);
+        /* a L2CAP frame has a minimum length of 4 */
+        return;
+    }
+
+    memcpy(&len, &data[0], 2);
+    if(type == FRAME_BLE_TYPE_DATA_LL_MSG)
+    {
+        /* a complete or the start of a L2CAP message */
+        if(len >= BLE_MAC_L2CAP_NODE_MPS)
+        {
+            /* start of fragmented L2CAP message */
+            /* include the L2CAP header into the buffer */
+            l2cap_rx_msg_len = len + BLE_MAC_L2CAP_HEADER_SIZE;
+
+            /* reinit L2CAP buffer */
+            memset(l2cap_rx_buf, 0x00, BLE_MAC_L2CAP_NODE_MTU);
+            l2cap_rx_index = 0;
+
+            /* copy message start into L2CAP buffer */
+            memcpy(l2cap_rx_buf, &data[0], data_len);
+            l2cap_rx_index = data_len - 1;
+        }
+        else
+        {
+            /* complete L2CAP message */
+            process_l2cap_msg(data, data_len);
+        }
+    }
+    else if(type == FRAME_BLE_TYPE_DATA_LL_FRAG)
+    {
+        memcpy(&l2cap_rx_buf[l2cap_rx_index], data, data_len);
+        l2cap_rx_index += data_len;
+
+        if(l2cap_rx_index >= l2cap_rx_msg_len - 1)
+        {
+            process_l2cap_msg(l2cap_rx_buf, l2cap_rx_msg_len);
+        }
+    }
+}
 
 /*---------------------------------------------------------------------------*/
 static void input(void)
 {
-//    uint8_t *data = (uint8_t *) packetbuf_dataptr();
-//    uint8_t len = packetbuf_datalen();
+    uint8_t *data = (uint8_t *) packetbuf_dataptr();
+    uint8_t len = packetbuf_datalen();
 
-//    if(len > 0)
-//    {
-//        process_l2cap_frame(data, len);
-//    }
+    if(len > 0)
+    {
+        process_l2cap_frame(data, len);
+    }
 }
 
 /*---------------------------------------------------------------------------*/

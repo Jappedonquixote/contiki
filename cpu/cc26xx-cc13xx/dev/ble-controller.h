@@ -100,6 +100,15 @@ typedef enum {
 } ble_scan_type_t;
 
 /*---------------------------------------------------------------------------*/
+/* List of packets to be sent by RDC layer */
+struct ble_buf_list {
+  struct ble_buf_list *next;
+  struct queuebuf *buf;
+  // TODO why include a ptr?
+  void *ptr;
+};
+
+/*---------------------------------------------------------------------------*/
 /**
  * The structure of a ble radio controller driver in Contiki.
  */
@@ -261,14 +270,9 @@ struct ble_controller_driver {
     ble_result_t (* disconnect) (unsigned int connection_handle,
                                  unsigned short reason);
 
-    /**
-     * Add data to be transmitted to the tx queue of the BLE connection.
-     *
-     * \param data_len length ot the data to be transmitted
-     * \param data data to be transmitted
-     */
-    ble_result_t (* queue_tx_data) (unsigned short data_len,
-                                    char *data);
+    ble_result_t (* send) (void);
+
+    ble_result_t (* send_list) (struct ble_buf_list *list);
 };
 
 #endif /* BLE_CONTROLLER_H_ */

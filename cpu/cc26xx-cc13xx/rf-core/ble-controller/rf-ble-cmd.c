@@ -359,7 +359,6 @@ void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
 {
     rfc_bleSlavePar_t *p = (rfc_bleSlavePar_t *) params;
 
-    memset(p, 0x00, sizeof(rfc_bleSlavePar_t));
     p->pRxQ = rx_queue;
     p->pTxQ = tx_queue;
     p->rxConfig.bAutoFlushIgnored = 0;
@@ -392,4 +391,24 @@ void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
     p->timeoutTrigger.triggerType = TRIG_REL_START;
     p->timeoutTime = (uint32_t) (win_size + start_before_anchor);
     p->endTrigger.triggerType = TRIG_NEVER;
+}
+
+/*---------------------------------------------------------------------------*/
+/* DATA queue functions                                                      */
+/*---------------------------------------------------------------------------*/
+unsigned short rf_ble_cmd_add_data_queue_entry(dataQueue_t *q, uint8_t *e)
+{
+    uint32_t cmdsta;
+
+    rfc_CMD_ADD_DATA_ENTRY_t cmd;
+    cmd.commandNo = CMD_ADD_DATA_ENTRY;
+    cmd.pQueue = q;
+    cmd.pEntry = e;
+
+    if(rf_core_send_cmd((uint32_t) &cmd, &cmdsta) != RF_CORE_CMD_OK) {
+        PRINTF("rf_ble_cmd_add_data_queue_entry: ");
+        print_cmdsta(cmdsta);
+        return RF_BLE_CMD_ERROR;
+    }
+    return RF_BLE_CMD_OK;
 }

@@ -29,44 +29,37 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * rf-ble-cmd.h
+ * ble-controller-cc26xx-ll-ctrl.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_RF_BLE_CMD_H_
-#define CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_RF_BLE_CMD_H_
+#ifndef CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_LL_CTRL_H_
+#define CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_LL_CTRL_H_
 
-#include "rf-core/api/common_cmd.h"
-#include "dev/ble-controller.h"
+/*---------------------------------------------------------------------------*/
+/* Types of LL control PDUs                                                  */
+#define BLE_LL_CONN_UPDATE_REQ              0x00
+#define BLE_LL_CHANNEL_MAP_REQ              0x01
+#define BLE_LL_TERMINATE_IND                0x02
+#define BLE_LL_ENC_REQ                      0x03
+#define BLE_LL_ENC_RSP                      0x04
+#define BLE_LL_START_ENC_REQ                0x05
+#define BLE_LL_START_ENC_RSP                0x06
+#define BLE_LL_UNKNOWN_RSP                  0x07
+#define BLE_LL_FEATURE_REQ                  0x08
+#define BLE_LL_FEATURE_RSP                  0x09
+#define BLE_LL_PAUSE_ENC_REQ                0x0A
+#define BLE_LL_PAUSE_ENC_RSP                0x0B
+#define BLE_LL_VERSION_IND                  0x0C
+#define BLE_LL_REJECT_IND                   0x0D
+#define BLE_LL_SLAVE_FEATURE_REQ            0x0E
+#define BLE_LL_CONN_PARAM_REQ               0x0F
+#define BLE_LL_CONN_PARAM_RSP               0x10
+#define BLE_LL_REJECT_IND_EXT               0x11
+#define BLE_LL_PING_REQ                     0x12
+#define BLE_LL_PING_RSP                     0x13
+/*---------------------------------------------------------------------------*/
+void ble_controller_ll_ctrl_parse_msg(void);
 
-#define RF_BLE_CMD_OK    1
-#define RF_BLE_CMD_ERROR 0
-
-
-unsigned short rf_ble_cmd_send(uint8_t *cmd);
-
-unsigned short rf_ble_cmd_wait(uint8_t *cmd);
-
-unsigned short rf_ble_cmd_setup_ble_mode(void);
-
-void rf_ble_cmd_create_adv_cmd(uint8_t *command, uint8_t channel,
-                               uint8_t *param, uint8_t *output);
-
-void rf_ble_cmd_create_adv_params(uint8_t *param, dataQueue_t *rx_queue,
-                           uint8_t adv_data_len, uint8_t *adv_data,
-                           uint8_t scan_resp_data_len, uint8_t *scan_resp_data,
-                           ble_addr_type_t own_addr_type, ble_addr_t own_addr);
-
-void rf_ble_cmd_create_slave_cmd(uint8_t *cmd, uint8_t channel, uint8_t *params,
-                                 uint8_t *output, uint32_t start_time);
-
-void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
-                         dataQueue_t *tx_queue, uint32_t access_address,
-                         uint8_t crc_init_0, uint8_t crc_init_1,
-                         uint8_t crc_init_2, uint32_t win_size,
-                         uint32_t start_before_anchor, uint8_t first_packet);
-
-unsigned short rf_ble_cmd_add_data_queue_entry(dataQueue_t *q, uint8_t *e);
-
-#endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_RF_BLE_CMD_H_ */
+#endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_LL_CTRL_H_ */

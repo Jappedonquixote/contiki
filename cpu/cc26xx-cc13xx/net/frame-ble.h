@@ -94,29 +94,6 @@ typedef struct {
 #define FRAME_BLE_DATA_PDU_LLID_CONTROL           0b11
 
 /*---------------------------------------------------------------------------*/
-/* Types of LL controll PDUs                                                 */
-#define FRAME_BLE_LL_CONN_UPDATE_REQ              0x00
-#define FRAME_BLE_LL_CHANNEL_MAP_REQ              0x01
-#define FRAME_BLE_LL_TERMINATE_IND                0x02
-#define FRAME_BLE_LL_ENC_REQ                      0x03
-#define FRAME_BLE_LL_ENC_RSP                      0x04
-#define FRAME_BLE_LL_START_ENC_REQ                0x05
-#define FRAME_BLE_LL_START_ENC_RSP                0x06
-#define FRAME_BLE_LL_UNKNOWN_RSP                  0x07
-#define FRAME_BLE_LL_FEATURE_REQ                  0x08
-#define FRAME_BLE_LL_FEATURE_RSP                  0x09
-#define FRAME_BLE_LL_PAUSE_ENC_REQ                0x0A
-#define FRAME_BLE_LL_PAUSE_ENC_RSP                0x0B
-#define FRAME_BLE_LL_VERSION_IND                  0x0C
-#define FRAME_BLE_LL_REJECT_IND                   0x0D
-#define FRAME_BLE_LL_SLAVE_FEATURE_REQ            0x0E
-#define FRAME_BLE_LL_CONN_PARAM_REQ               0x0F
-#define FRAME_BLE_LL_CONN_PARAM_RSP               0x10
-#define FRAME_BLE_LL_REJECT_IND_EXT               0x11
-#define FRAME_BLE_LL_PING_REQ                     0x12
-#define FRAME_BLE_LL_PING_RSP                     0x13
-
-/*---------------------------------------------------------------------------*/
 /* header of BLE data PDU                                                    */
 typedef struct {
     uint8_t llid:2;         /* packet indicator */
