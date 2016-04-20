@@ -50,7 +50,6 @@
 #include "rf-core/rf-core.h"
 #include "rf-core/api/ble_cmd.h"
 #include "rf-core/ble-controller/rf-ble-cmd.h"
-#include "rf-core/ble-controller/ble-controller-cc26xx-ll-ctrl.h"
 
 #include "lib/memb.h"
 #include "lib/list.h"
@@ -113,8 +112,9 @@ static uint8_t scan_resp_data[BLE_SCAN_RESP_DATA_LEN];
 static rf_ticks_t adv_event_next;
 /*---------------------------------------------------------------------------*/
 /* CONNECTION                                                                */
-#define CONN_EVENT_START_BEFORE_ANCHOR   4000   /* 1 ms */
-#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 20000   /* 5 ms*/
+#define CONN_EVENT_NUM_DATA_CHANNELS       37
+#define CONN_EVENT_WINDOW_WIDENING       4000   /* 1 ms */
+#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 40000   /* 10 ms*/
 
 typedef struct {
     uint32_t access_address;
@@ -127,8 +127,10 @@ typedef struct {
     uint16_t latency;
     rf_ticks_t timeout;
     uint64_t channel_map;
+    uint8_t num_used_channels;
     uint8_t hop;
     uint8_t sca;
+    rf_ticks_t window_widening;
     rf_ticks_t timestamp;
 } ble_conn_param_t;
 
@@ -136,11 +138,22 @@ typedef struct {
 static ble_conn_param_t conn_param;
 
 typedef struct {
+    uint64_t channel_map;
+    uint16_t counter;
+    uint8_t num_used_channels;
+} ble_conn_channel_update_t;
+
+static ble_conn_channel_update_t conn_channel_update;
+
+typedef struct {
     /* connection event counter */
     uint16_t counter;
 
-    /* used data channel */
-    uint8_t channel;
+    /* unmapped data mapped_channel */
+    uint8_t unmapped_channel;
+
+    /* used data mapped_channel */
+    uint8_t mapped_channel;
 
     /* start of the connection event */
     rf_ticks_t start;
@@ -200,6 +213,37 @@ static uint8_t cmd_buf[RF_CMD_BUFFER_SIZE];
 static uint8_t param_buf[RF_PARAM_BUFFER_SIZE];
 /* buffer for all command output */
 static uint8_t output_buf[RF_PARAM_BUFFER_SIZE];
+/*---------------------------------------------------------------------------*/
+/* Types of LL control PDUs                                                  */
+#define BLE_LL_CONN_UPDATE_REQ              0x00
+#define BLE_LL_CHANNEL_MAP_REQ              0x01
+#define BLE_LL_TERMINATE_IND                0x02
+#define BLE_LL_ENC_REQ                      0x03
+#define BLE_LL_ENC_RSP                      0x04
+#define BLE_LL_START_ENC_REQ                0x05
+#define BLE_LL_START_ENC_RSP                0x06
+#define BLE_LL_UNKNOWN_RSP                  0x07
+#define BLE_LL_FEATURE_REQ                  0x08
+#define BLE_LL_FEATURE_RSP                  0x09
+#define BLE_LL_PAUSE_ENC_REQ                0x0A
+#define BLE_LL_PAUSE_ENC_RSP                0x0B
+#define BLE_LL_VERSION_IND                  0x0C
+#define BLE_LL_REJECT_IND                   0x0D
+#define BLE_LL_SLAVE_FEATURE_REQ            0x0E
+#define BLE_LL_CONN_PARAM_REQ               0x0F
+#define BLE_LL_CONN_PARAM_RSP               0x10
+#define BLE_LL_REJECT_IND_EXT               0x11
+#define BLE_LL_PING_REQ                     0x12
+#define BLE_LL_PING_RSP                     0x13
+/*---------------------------------------------------------------------------*/
+/* controller specific LL fields                                             */
+#define BLE_VERSION_4_0                     6
+#define BLE_VERSION_4_1                     7
+#define BLE_VERSION_4_2                     8
+#define BLE_VERSION_NR        BLE_VERSION_4_1
+
+#define BLE_COMPANY_ID                 0xFFFF
+#define BLE_SUB_VERSION_NR             0xBEEF
 /*---------------------------------------------------------------------------*/
 /* LPM                                                                       */
 /*---------------------------------------------------------------------------*/
@@ -554,6 +598,36 @@ static void free_finished_tx_bufs(void)
     }
 }
 /*---------------------------------------------------------------------------*/
+static void
+update_data_channel()
+{
+    uint8_t i;
+    uint8_t j;
+    uint8_t remap_index;
+    /* perform the data channel selection according to BLE standard */
+
+    /* calculate unmapped channel*/
+    conn_event.unmapped_channel = (conn_event.unmapped_channel + conn_param.hop)
+                                            % CONN_EVENT_NUM_DATA_CHANNELS;
+
+    /* map the calculated channel */
+    if(conn_param.channel_map & (1ULL << conn_event.unmapped_channel)) {
+        /* channel is marked as used */
+        conn_event.mapped_channel = conn_event.unmapped_channel;
+    } else {
+        remap_index = conn_event.unmapped_channel % conn_param.num_used_channels;
+        j = 0;
+        for(i = 0; i < CONN_EVENT_NUM_DATA_CHANNELS; i++) {
+            if(conn_param.channel_map & (1ULL << i)) {
+                if(j == remap_index) {
+                    conn_event.mapped_channel = i;
+                }
+                j++;
+            }
+        }
+    }
+}
+/*---------------------------------------------------------------------------*/
 static void state_advertising(process_event_t ev, process_data_t data,
                               uint8_t *cmd, uint8_t *param, uint8_t *output)
 {
@@ -580,9 +654,10 @@ static void state_advertising(process_event_t ev, process_data_t data,
             rf_ble_cmd_send(cmd);
             rf_ble_cmd_wait(cmd);
         }
-
+        /* set timer interrupt for next advertising event */
         adv_event_next = adv_event_next + adv_param.interval;
         rf_core_start_timer_comp(adv_event_next);
+
     } else if(ev == rf_core_data_rx_event) {
         /* data received */
         entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
@@ -602,21 +677,22 @@ static void state_advertising(process_event_t ev, process_data_t data,
                     (uint8_t *) &current_rx_entry[23]);
 
             /* convert the timing values into rf core ticks */
-            // TODO currently a safety factor of 2 is added, maybe this needs to be removed later on
-            conn_param.win_size = conn_param.win_size * 5000 * 2;
+            conn_param.win_size = conn_param.win_size * 5000;
             conn_param.win_offset = conn_param.win_offset * 5000;
             conn_param.interval = conn_param.interval * 5000;
             conn_param.timeout = conn_param.timeout * 40000;
+            conn_param.window_widening = CONN_EVENT_WINDOW_WIDENING;
 
             conn_event.counter = 0;
-            conn_event.channel = conn_param.hop;
+            conn_event.unmapped_channel = 0;
+            update_data_channel();
             first_conn_event_anchor = conn_param.timestamp + conn_param.win_offset;
 
             if(conn_param.win_offset <= 60000) {
                 /* in this case the first anchor point starts too early,
                  * ignore the first conn event and start with the 2nd */
                 conn_event.counter++;
-                conn_event.channel = (conn_event.channel + conn_param.hop) % 37;
+                conn_event.mapped_channel = (conn_event.mapped_channel + conn_param.hop) % 37;
                 first_conn_event_anchor += conn_param.interval;
             }
             conn_event.start = first_conn_event_anchor;
@@ -624,10 +700,10 @@ static void state_advertising(process_event_t ev, process_data_t data,
             rf_ble_cmd_create_slave_params(param, &rx_data_queue, &tx_data_queue,
                     conn_param.access_address, conn_param.crc_init_0,
                     conn_param.crc_init_1, conn_param.crc_init_2,
-                    conn_param.win_size, CONN_EVENT_START_BEFORE_ANCHOR, 1);
+                    conn_param.win_size, conn_param.window_widening, 1);
 
-            rf_ble_cmd_create_slave_cmd(cmd, conn_event.channel, param,
-                    output, (conn_event.start - CONN_EVENT_START_BEFORE_ANCHOR));
+            rf_ble_cmd_create_slave_cmd(cmd, conn_event.mapped_channel, param,
+                    output, (conn_event.start - conn_param.window_widening));
 
             if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK)
             {
@@ -635,6 +711,7 @@ static void state_advertising(process_event_t ev, process_data_t data,
                 return;
             }
 
+            /* setup timer interrupt for first connection event */
             conn_event.next_start = first_conn_event_anchor + conn_param.interval;
             rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR);
 
@@ -643,7 +720,57 @@ static void state_advertising(process_event_t ev, process_data_t data,
         free_finished_rx_bufs();
     }
 }
+/*---------------------------------------------------------------------------*/
+void process_ll_ctrl_msg(void)
+{
+    uint8_t resp_len = 0;
+    uint8_t resp_data[26];
+    uint8_t *data = packetbuf_dataptr();
+    uint8_t op_code = data[0];
 
+    uint64_t channel_map = 0;
+    uint16_t instant;
+    uint16_t i;
+
+    if(op_code == BLE_LL_CHANNEL_MAP_REQ) {
+        memcpy(&channel_map, &data[1], 5);
+        memcpy(&instant, &data[6], 2);
+
+        conn_channel_update.channel_map = channel_map;
+        conn_channel_update.counter = instant;
+        conn_channel_update.num_used_channels = 0;
+
+        for(i = 0; i < CONN_EVENT_NUM_DATA_CHANNELS; i++) {
+            if(channel_map & (1ULL << i)) {
+                conn_channel_update.num_used_channels++;
+            }
+        }
+        PRINTF("new mapped_channel map: 0x%010llX; instant: %u; current event: %u; numUsedChannels: %u\n",
+                channel_map, instant, conn_event.counter, conn_channel_update.num_used_channels);
+
+    } else if(op_code == BLE_LL_FEATURE_REQ) {
+        resp_data[0] = BLE_LL_FEATURE_RSP;
+        memset(&resp_data[1], 0x00, 8);
+        resp_len = 9;
+    } else if(op_code == BLE_LL_VERSION_IND) {
+        resp_data[0] = BLE_LL_VERSION_IND;
+        resp_data[1] = BLE_VERSION_NR;
+        resp_data[2] = (BLE_COMPANY_ID >> 8) & 0xFF;
+        resp_data[3] = BLE_COMPANY_ID & 0xFF;
+        resp_data[4] = (BLE_SUB_VERSION_NR >> 8) & 0xFF;
+        resp_data[5] = BLE_SUB_VERSION_NR & 0xFF;
+        resp_len = 6;
+    } else {
+        PRINTF("parse_ll_ctrl_msg() opcode: 0x%02X received\n", op_code);
+    }
+
+    if(resp_len > 0) {
+        /* write response into packet buffer */
+        packetbuf_copyfrom(resp_data, resp_len);
+        packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_CTRL);
+        ble_controller.send();
+    }
+}
 /*---------------------------------------------------------------------------*/
 static void process_rx_entry_data_channel(void)
 {
@@ -678,14 +805,14 @@ static void process_rx_entry_data_channel(void)
 
         if(hdr_len < 0)
         {
-            PRINTF("could not parse data channel packet\n");
+            PRINTF("could not parse data mapped_channel packet\n");
             return;
         }
 
         if(packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE) == FRAME_BLE_TYPE_DATA_LL_CTRL)
         {
             /* received frame is a LL control frame */
-            ble_controller_ll_ctrl_parse_msg();
+            process_ll_ctrl_msg();
         }
         else
         {
@@ -694,33 +821,44 @@ static void process_rx_entry_data_channel(void)
         }
     }
 }
-
 /*---------------------------------------------------------------------------*/
 static void
 state_conn_slave(process_event_t ev, process_data_t data,
                               uint8_t *cmd, uint8_t *param, uint8_t *output)
 {
+    rfc_bleMasterSlaveOutput_t *o = (rfc_bleMasterSlaveOutput_t *) output;
     if(ev == rf_core_timer_event) {
+        /* check if the last connection event was executed properly */
         if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
             PRINTF("command status: 0x%04X; connection event counter: %d\n",
                     CMD_GET_STATUS(cmd), conn_event.counter);
-            return;
         }
 
         /* calculate parameters for upcoming connection event */
-        conn_event.start = conn_event.next_start;
+        if(o->pktStatus.bTimeStampValid) {
+            /* get the actual value of the anchor point */
+            conn_event.start = (o->timeStamp + conn_param.interval);
+        } else {
+            /* use the estimated start */
+            conn_event.start = conn_event.next_start;
+        }
         conn_event.counter++;
-        conn_event.channel = (conn_event.channel + conn_param.hop) % 37;
+        if(conn_event.counter == conn_channel_update.counter) {
+            /* use the new channel map from this event on */
+            conn_param.channel_map = conn_channel_update.channel_map;
+            conn_param.num_used_channels = conn_channel_update.num_used_channels;
+        }
+        update_data_channel();
 
         /* create & send slave command for upcoming connection event */
         rf_ble_cmd_create_slave_params(param, &rx_data_queue, &tx_data_queue,
                             conn_param.access_address, conn_param.crc_init_0,
                             conn_param.crc_init_1, conn_param.crc_init_2,
-                            conn_param.win_size, CONN_EVENT_START_BEFORE_ANCHOR,
+                            conn_param.win_size, conn_param.window_widening,
                             0);
 
-        rf_ble_cmd_create_slave_cmd(cmd, conn_event.channel, param,
-                output, (conn_event.start - CONN_EVENT_START_BEFORE_ANCHOR));
+        rf_ble_cmd_create_slave_cmd(cmd, conn_event.mapped_channel, param,
+                output, (conn_event.start - conn_param.window_widening));
 
         if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK) {
             PRINTF("connection error; event counter: %u\n", conn_event.counter);
@@ -728,8 +866,7 @@ state_conn_slave(process_event_t ev, process_data_t data,
         }
 
         /* calculate next anchor point & setup timer interrupt */
-        conn_event.next_start = first_conn_event_anchor +
-                (conn_param.interval * (conn_event.counter + 1));
+        conn_event.next_start = conn_event.start + conn_param.interval;
         if(rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR) != RF_CORE_CMD_OK ) {
             PRINTF("timer error; event counter: %u\n", conn_event.counter);
             return;

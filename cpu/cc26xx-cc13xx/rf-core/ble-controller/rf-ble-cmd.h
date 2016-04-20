@@ -65,7 +65,7 @@ void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
                          dataQueue_t *tx_queue, uint32_t access_address,
                          uint8_t crc_init_0, uint8_t crc_init_1,
                          uint8_t crc_init_2, uint32_t win_size,
-                         uint32_t start_before_anchor, uint8_t first_packet);
+                         uint32_t window_widening, uint8_t first_packet);
 
 unsigned short rf_ble_cmd_add_data_queue_entry(dataQueue_t *q, uint8_t *e);
 
