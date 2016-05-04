@@ -43,7 +43,6 @@
 
 #include "net/netstack.h"
 #include "net/packetbuf.h"
-#include "net/framer-ble.h"
 #include "net/frame-ble.h"
 
 #include "rf-core/api/data_entry.h"
@@ -725,7 +724,8 @@ void process_ll_ctrl_msg(void)
 {
     uint8_t resp_len = 0;
     uint8_t resp_data[26];
-    uint8_t *data = packetbuf_dataptr();
+    /* the first 2 bytes in the packet buffer are the header */
+    uint8_t *data = packetbuf_dataptr() + 2;
     uint8_t op_code = data[0];
 
     uint64_t channel_map = 0;
@@ -781,19 +781,17 @@ static void process_rx_entry_data_channel(void)
     uint8_t channel;
 
     rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
-    if(entry->status != DATA_ENTRY_FINISHED)
-    {
+    if(entry->status != DATA_ENTRY_FINISHED) {
         return;
     }
 
     /* the last 6 bytes of the data are status and timestamp bytes */
     data_len = current_rx_entry[8] - 6;
 
-    if(data_len > 0)
-    {
+    if(data_len > 0) {
 
         /* copy payload in packetbuffer */
-        packetbuf_copyfrom(&current_rx_entry[9], data_len);
+        packetbuf_copyfrom(&current_rx_entry[data_offset], data_len);
 
         /* set the controller dependent attributes */
         rssi = current_rx_entry[data_offset + data_len];
@@ -801,23 +799,19 @@ static void process_rx_entry_data_channel(void)
         packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
         packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
 
-        hdr_len = NETSTACK_CONF_FRAMER.parse();
-
         if(hdr_len < 0)
         {
             PRINTF("could not parse data mapped_channel packet\n");
             return;
         }
 
-        if(packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE) == FRAME_BLE_TYPE_DATA_LL_CTRL)
-        {
+        if((current_rx_entry[data_offset] & 0x03) ==
+            FRAME_BLE_DATA_PDU_LLID_CONTROL) {
             /* received frame is a LL control frame */
             process_ll_ctrl_msg();
-        }
-        else
-        {
-            /* LLID messages and fragments are handled in the mac layer */
-            NETSTACK_MAC.input();
+        } else {
+            /* LLID messages and fragments are handled in the upper layers */
+            NETSTACK_RDC.input();
         }
     }
 }

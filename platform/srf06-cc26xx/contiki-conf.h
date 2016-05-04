@@ -66,7 +66,7 @@
 #endif
 
 /* Configure NullRDC for when it's selected */
-#define NULLRDC_CONF_802154_AUTOACK             1
+#define NULLRDC_CONF_802154_AUTOACK             0
 
 /* Configure ContikiMAC for when it's selected */
 #define CONTIKIMAC_CONF_WITH_CONTIKIMAC_HEADER  0
@@ -106,8 +106,9 @@
 #define RF_CORE_CONF_CHANNEL                     25
 #endif
 
-#define NULLRDC_CONF_802154_AUTOACK_HW            1
+#define NULLRDC_CONF_802154_AUTOACK_HW            0
 #define NULLRDC_CONF_SEND_802154_ACK              0
+#define NULLRDC_CONF_ADDRESS_FILTER               0
 #endif
 
 #define NETSTACK_RADIO_MAX_PAYLOAD_LEN        125
