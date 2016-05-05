@@ -462,8 +462,6 @@ static ble_result_t send(void *buf, unsigned short buf_len)
 {
     tx_buf_t *tx_buf;
     rfc_dataEntryGeneral_t *e;
-    uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
-    uint8_t llid;
 
     /* allocate a TX buffer */
     tx_buf = memb_alloc(&tx_buffers);
@@ -474,30 +472,13 @@ static ble_result_t send(void *buf, unsigned short buf_len)
     list_add(tx_buffers_queued, tx_buf);
     e = (rfc_dataEntryGeneral_t *) tx_buf;
 
-    /* include the frame type too */
-    e->length = buf_len + 1;
+
+    e->length = buf_len;
     e->config.lenSz = 1;
     e->pNextEntry = NULL;
 
-    switch(type) {
-    case FRAME_BLE_TYPE_DATA_LL_CTRL:
-        llid = FRAME_BLE_DATA_PDU_LLID_CONTROL;
-        break;
-    case FRAME_BLE_TYPE_DATA_LL_MSG:
-        llid = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
-        break;
-    case FRAME_BLE_TYPE_DATA_LL_FRAG:
-        llid = FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT;
-        break;
-    default:
-        PRINTF("send() invalid frame type\n");
-        return BLE_RESULT_INVALID_PARAM;
-    }
-
-    /* set the frame type */
-    memset(&tx_buf->data[8], llid, 1);
     /* set the information payload */
-    memcpy(&tx_buf->data[9], buf, buf_len);
+    memcpy(&tx_buf->data[8], buf, buf_len);
 
     if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
         PRINTF("send() could not add buffer to tx data queue\n");
@@ -740,25 +721,24 @@ void process_ll_ctrl_msg(void)
         }
 
     } else if(op_code == BLE_LL_FEATURE_REQ) {
-        resp_data[0] = BLE_LL_FEATURE_RSP;
-        memset(&resp_data[1], 0x00, 8);
-        resp_len = 9;
+        resp_data[0] = FRAME_BLE_DATA_PDU_LLID_CONTROL;
+        resp_data[1] = BLE_LL_FEATURE_RSP;
+        memset(&resp_data[2], 0x00, 8);
+        resp_len = 10;
     } else if(op_code == BLE_LL_VERSION_IND) {
-        resp_data[0] = BLE_LL_VERSION_IND;
-        resp_data[1] = BLE_VERSION_NR;
-        resp_data[2] = (BLE_COMPANY_ID >> 8) & 0xFF;
-        resp_data[3] = BLE_COMPANY_ID & 0xFF;
-        resp_data[4] = (BLE_SUB_VERSION_NR >> 8) & 0xFF;
-        resp_data[5] = BLE_SUB_VERSION_NR & 0xFF;
-        resp_len = 6;
+        resp_data[0] = FRAME_BLE_DATA_PDU_LLID_CONTROL;
+        resp_data[1] = BLE_LL_VERSION_IND;
+        resp_data[2] = BLE_VERSION_NR;
+        resp_data[3] = (BLE_COMPANY_ID >> 8) & 0xFF;
+        resp_data[4] = BLE_COMPANY_ID & 0xFF;
+        resp_data[5] = (BLE_SUB_VERSION_NR >> 8) & 0xFF;
+        resp_data[6] = BLE_SUB_VERSION_NR & 0xFF;
+        resp_len = 7;
     } else {
         PRINTF("parse_ll_ctrl_msg() opcode: 0x%02X received\n", op_code);
     }
 
     if(resp_len > 0) {
-        /* write response into packet buffer */
-//        packetbuf_copyfrom(resp_data, resp_len);
-        packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_CTRL);
         ble_controller.send((void *) resp_data, resp_len);
     }
 }
@@ -815,8 +795,8 @@ state_conn_slave(process_event_t ev, process_data_t data,
     if(ev == rf_core_timer_event) {
         /* check if the last connection event was executed properly */
         if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
-            PRINTF("command status: 0x%04X; connection event counter: %d\n",
-                    CMD_GET_STATUS(cmd), conn_event.counter);
+//            PRINTF("command status: 0x%04X; connection event counter: %d\n",
+//                    CMD_GET_STATUS(cmd), conn_event.counter);
         }
 
         /* calculate parameters for upcoming connection event */

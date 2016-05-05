@@ -186,8 +186,8 @@ static void init(void)
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-//    PRINTF("[ ble-mac ] send()\n");
-//    NETSTACK_RDC.send(sent_callback, ptr);
+    PRINTF("[ ble-mac ] send()\n");
+    NETSTACK_RDC.send(sent_callback, ptr);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -213,9 +213,6 @@ void process_l2cap_conn_req(uint8_t *data)
     memcpy(&l2cap_router.mtu, &data[7], 2);
     memcpy(&l2cap_router.mps, &data[9], 2);
     memcpy(&l2cap_router.credits, &data[11], 2);
-
-//    PRINTF("L2CAP connection request:\n");
-//    print_l2cap_channel(l2cap_router);
 
     /* create L2CAP connection response */
     /* length */
@@ -245,10 +242,9 @@ void process_l2cap_conn_req(uint8_t *data)
     /* result */
     memset(&resp_data[16], 0x00, 2);
 
-//    packetbuf_copyfrom((void *) resp_data, 18);
+    packetbuf_copyfrom((void *) resp_data, 18);
     packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_MSG);
-    // TODO
-    NETSTACK_RADIO.send((void *) resp_data, 18);
+    NETSTACK_RDC.send(NULL, NULL);
 
 }
 /*---------------------------------------------------------------------------*/

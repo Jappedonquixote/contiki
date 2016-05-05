@@ -40,7 +40,7 @@
 #include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -52,43 +52,46 @@
 #endif
 /*---------------------------------------------------------------------------*/
 struct ble_hdr {
-    uint8_t data_pdu_type;
+    uint8_t llid;
 };
 /*---------------------------------------------------------------------------*/
 int length(void)
 {
-    return 0;
+    return sizeof(struct ble_hdr);
 }
 
 /*---------------------------------------------------------------------------*/
 int create(void)
 {
     struct ble_hdr *hdr;
+    uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
+
     if(packetbuf_hdralloc(sizeof(struct ble_hdr)) == 0)
     {
         PRINTF("framer-ble: header is too large\n");
         return FRAMER_FAILED;
     }
     hdr = packetbuf_hdrptr();
-    hdr->data_pdu_type = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
+
+    switch (type)
+    {
+    case FRAME_BLE_TYPE_DATA_LL_CTRL:
+        hdr->llid = FRAME_BLE_DATA_PDU_LLID_CONTROL;
+        break;
+    case FRAME_BLE_TYPE_DATA_LL_MSG:
+        hdr->llid = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
+        break;
+    case FRAME_BLE_TYPE_DATA_LL_FRAG:
+        hdr->llid = FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT;
+        break;
+    default:
+        PRINTF("framer-ble create() invalid frame type\n");
+        return FRAMER_FAILED;
+    }
 
     return sizeof(struct ble_hdr);
 }
 
-/*---------------------------------------------------------------------------*/
-int framer_ble_parse_frame(frame_ble_t *frame)
-{
-    int hdr_len;
-
-    hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), frame);
-
-    if(hdr_len && packetbuf_hdrreduce(hdr_len))
-    {
-        packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, frame->frame_type);
-        return hdr_len;
-    }
-    return FRAMER_FAILED;
-}
 
 /*---------------------------------------------------------------------------*/
 int parse(void)
