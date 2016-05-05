@@ -73,7 +73,7 @@ CONTIKI_CPU_SOURCEFILES += contiki-watchdog.c
 CONTIKI_CPU_SOURCEFILES += putchar.c ieee-addr.c batmon-sensor.c
 CONTIKI_CPU_SOURCEFILES += slip-arch.c slip.c cc26xx-uart.c lpm.c
 CONTIKI_CPU_SOURCEFILES += gpio-interrupt.c oscillators.c
-CONTIKI_CPU_SOURCEFILES += rf-core.c rf-ble.c
+CONTIKI_CPU_SOURCEFILES += rf-core.c ble-mode.c
 CONTIKI_CPU_SOURCEFILES += ble-controller-cc26xx.c
 CONTIKI_CPU_SOURCEFILES += rf-ble-cmd.c ble-mac.c framer-ble.c frame-ble.c
 

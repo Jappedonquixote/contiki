@@ -91,8 +91,6 @@ typedef struct {
     rf_ticks_t interval;
     ble_adv_type_t type;
     ble_addr_type_t own_addr_type;
-    ble_addr_type_t dir_addr_type;
-    ble_addr_t dir_addr;
     uint8_t channel_map;
 } ble_adv_param_t;
 
@@ -343,15 +341,12 @@ static ble_result_t read_buffer_size(unsigned int *buf_len,
 
 /*---------------------------------------------------------------------------*/
 static ble_result_t set_adv_param(unsigned int adv_int, ble_adv_type_t type,
-        ble_addr_type_t own_type, ble_addr_type_t dir_type, ble_addr_t dir,
-        unsigned short adv_map)
+        ble_addr_type_t own_type, unsigned short adv_map)
 {
     /* convert the adv_int according to BLE standard to rf core ticks */
     adv_param.interval = adv_int * 2500;
     adv_param.type = type;
     adv_param.own_addr_type = own_type;
-    adv_param.dir_addr_type = dir_type;
-    memcpy(&adv_param.dir_addr, &dir, BLE_ADDR_SIZE);
     adv_param.channel_map = adv_map;
 
     return BLE_RESULT_OK;
@@ -463,26 +458,24 @@ static ble_result_t disconnect(unsigned int connection_handle,
 }
 
 /*---------------------------------------------------------------------------*/
-static ble_result_t send()
+static ble_result_t send(void *buf, unsigned short buf_len)
 {
-    tx_buf_t *buf;
+    tx_buf_t *tx_buf;
     rfc_dataEntryGeneral_t *e;
-    uint8_t len = packetbuf_datalen();
     uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
-    uint8_t *data = packetbuf_dataptr();
     uint8_t llid;
 
     /* allocate a TX buffer */
-    buf = memb_alloc(&tx_buffers);
-    if(buf == NULL) {
+    tx_buf = memb_alloc(&tx_buffers);
+    if(tx_buf == NULL) {
         PRINTF("send() could not allocate tx buffer\n");
         return BLE_RESULT_ERROR;
     }
-    list_add(tx_buffers_queued, buf);
-    e = (rfc_dataEntryGeneral_t *) buf;
+    list_add(tx_buffers_queued, tx_buf);
+    e = (rfc_dataEntryGeneral_t *) tx_buf;
 
     /* include the frame type too */
-    e->length = len + 1;
+    e->length = buf_len + 1;
     e->config.lenSz = 1;
     e->pNextEntry = NULL;
 
@@ -502,11 +495,11 @@ static ble_result_t send()
     }
 
     /* set the frame type */
-    memset(&buf->data[8], llid, 1);
+    memset(&tx_buf->data[8], llid, 1);
     /* set the information payload */
-    memcpy(&buf->data[9], data, len);
+    memcpy(&tx_buf->data[9], buf, buf_len);
 
-    if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, buf->data) != RF_BLE_CMD_OK) {
+    if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
         PRINTF("send() could not add buffer to tx data queue\n");
         return BLE_RESULT_ERROR;
     }
@@ -745,8 +738,6 @@ void process_ll_ctrl_msg(void)
                 conn_channel_update.num_used_channels++;
             }
         }
-        PRINTF("new mapped_channel map: 0x%010llX; instant: %u; current event: %u; numUsedChannels: %u\n",
-                channel_map, instant, conn_event.counter, conn_channel_update.num_used_channels);
 
     } else if(op_code == BLE_LL_FEATURE_REQ) {
         resp_data[0] = BLE_LL_FEATURE_RSP;
@@ -766,9 +757,9 @@ void process_ll_ctrl_msg(void)
 
     if(resp_len > 0) {
         /* write response into packet buffer */
-        packetbuf_copyfrom(resp_data, resp_len);
+//        packetbuf_copyfrom(resp_data, resp_len);
         packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_CTRL);
-        ble_controller.send();
+        ble_controller.send((void *) resp_data, resp_len);
     }
 }
 /*---------------------------------------------------------------------------*/

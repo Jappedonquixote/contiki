@@ -41,7 +41,6 @@
 #include "net/frame-ble.h"
 
 #include "dev/ble-controller.h"
-#include "rf-core/ble-controller/ble-controller-cc26xx.h"
 
 #include <string.h>
 
@@ -77,9 +76,9 @@
 static ble_addr_t ble_addr;
 
 /* length of a single BLE controller buffer */
-static unsigned int buffer_len;
+static int buffer_len;
 /* Number of buffers available at the BLE controller */
-static unsigned int num_buffer;
+static int num_buffer;
 /*---------------------------------------------------------------------------*/
 static uint8_t l2cap_rx_buf[BLE_MAC_L2CAP_NODE_MTU];
 static uint16_t l2cap_rx_index;
@@ -94,15 +93,6 @@ typedef struct {
 
 static ble_mac_l2cap_channel_t l2cap_router;
 static ble_mac_l2cap_channel_t l2cap_node;
-/*---------------------------------------------------------------------------*/
-void print_l2cap_channel(ble_mac_l2cap_channel_t channel)
-{
-    PRINTF("L2CAP channel information\n");
-    PRINTF("CID:    0x%04X\n", channel.cid);
-    PRINTF("MTU:     %5d\n", channel.mtu);
-    PRINTF("MPS:     %5d\n", channel.mps);
-    PRINTF("credits: %5d\n", channel.credits);
-}
 /*---------------------------------------------------------------------------*/
 static uint8_t init_adv_data(char *adv_data)
 {
@@ -153,61 +143,44 @@ static uint8_t init_scan_resp_data(char *scan_resp_data)
 /*---------------------------------------------------------------------------*/
 static void init(void)
 {
-    ble_result_t res;
     uint8_t adv_data_len, scan_resp_data_len;
     char adv_data[BLE_ADV_DATA_LEN];
     char scan_resp_data[BLE_SCAN_RESP_DATA_LEN];
 
     PRINTF("[ ble-mac ] init()\n");
 
+    /* initialize the L2CAP connection parameter */
     l2cap_node.cid = BLE_MAC_L2CAP_FLOW_CHANNEL;
     l2cap_node.credits = BLE_MAC_L2CAP_NODE_INIT_CREDITS;
     l2cap_node.mps = BLE_MAC_L2CAP_NODE_MPS;
     l2cap_node.mtu = BLE_MAC_L2CAP_NODE_MTU;
 
     /* Initialize the BLE controller */
-    res = ble_controller.reset();
-    if(res != BLE_RESULT_OK)
-    {
-        PRINTF("ble-mac init() could not reset BLE controller\n");
-        return;
-    }
-
-    res = ble_controller.read_bd_addr(&ble_addr);
-    if(res != BLE_RESULT_OK)
-    {
-        PRINTF("ble-mac init() could not read BLE address\n");
-        return;
-    }
-
-    res = ble_controller.read_buffer_size(&buffer_len, &num_buffer);
-    if(res != BLE_RESULT_OK)
-    {
-        PRINTF("ble-mac init() could not read BLE buffer size\n");
-        return;
-    }
+    NETSTACK_RADIO.init();
+    NETSTACK_RADIO.get_object(RADIO_CONST_BLE_BD_ADDR, &ble_addr, BLE_ADDR_SIZE);
+    NETSTACK_RADIO.get_value(RADIO_CONST_BLE_BUFFER_SIZE, &buffer_len);
+    NETSTACK_RADIO.get_value(RADIO_CONST_BLE_BUFFER_AMOUNT, &num_buffer);
 
     PRINTF("ble-mac init() BLE-addr: ");
     PRINTADDR(ble_addr);
     PRINTF("; buffer-len: %d; num-buffer: %d\n", buffer_len, num_buffer);
 
+
+    /* set the advertisement parameter */
+    NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_INTERVAL, 0x0800);
+    NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_TYPE, BLE_ADV_DIR_IND_LDC);
+    NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_OWN_ADDR_TYPE, BLE_ADDR_TYPE_PUBLIC);
+    NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_CHANNEL_MAP, 0x01);
+
     adv_data_len = init_adv_data(adv_data);
     scan_resp_data_len = init_scan_resp_data(scan_resp_data);
 
-    if(ble_controller.set_adv_param(0x0800, BLE_ADV_DIR_IND_LDC, BLE_ADDR_TYPE_PUBLIC, 0, 0, 0x01) != BLE_RESULT_OK)
-    {
-        PRINTF("could not set advertising parameter\n");
-    }
-    if(ble_controller.set_adv_data(adv_data_len, adv_data) != BLE_RESULT_OK)
-    {
-        PRINTF("could not set advertising data\n");
-    }
-    if(ble_controller.set_scan_resp_data(scan_resp_data_len, scan_resp_data) != BLE_RESULT_OK) {
-        PRINTF("could not set scan response data\n");
-    }
-    if(ble_controller.set_adv_enable(1) != BLE_RESULT_OK) {
-        PRINTF("could not enable advertisement\n");
-    }
+    /* set advertisement payload & scan response */
+    NETSTACK_RADIO.set_object(RADIO_PARAM_BLE_ADV_PAYLOAD, adv_data, adv_data_len);
+    NETSTACK_RADIO.set_object(RADIO_PARAM_BLE_ADV_SCAN_RESPONSE, scan_resp_data, scan_resp_data_len);
+
+    /* enable advertisement */
+    NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_ENABLE, 1);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -272,9 +245,11 @@ void process_l2cap_conn_req(uint8_t *data)
     /* result */
     memset(&resp_data[16], 0x00, 2);
 
-    packetbuf_copyfrom((void *) resp_data, 18);
+//    packetbuf_copyfrom((void *) resp_data, 18);
     packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_MSG);
-    ble_controller.send();
+    // TODO
+    NETSTACK_RADIO.send((void *) resp_data, 18);
+
 }
 /*---------------------------------------------------------------------------*/
 void process_l2cap_msg(uint8_t *msg, uint8_t msg_len)

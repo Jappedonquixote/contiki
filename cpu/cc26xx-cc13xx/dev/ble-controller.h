@@ -40,15 +40,21 @@
 #include <stddef.h>
 
 /*---------------------------------------------------------------------------*/
+/* Advertisement channel definitions                                         */
 #define BLE_ADV_DATA_LEN         31
 #define BLE_SCAN_RESP_DATA_LEN   31
-
 #define BLE_ADV_CHANNEL_1        37
 #define BLE_ADV_CHANNEL_1_MASK   0b001
 #define BLE_ADV_CHANNEL_2        38
 #define BLE_ADV_CHANNEL_2_MASK   0b010
 #define BLE_ADV_CHANNEL_3        39
 #define BLE_ADV_CHANNEL_3_MASK   0b100
+#define BLE_ADV_INTERVAL_MIN     0x0020
+#define BLE_ADV_INTERVAL_MAX     0x4000
+/*---------------------------------------------------------------------------*/
+/* Data channel definitions                                                  */
+#define BLE_DATA_CHANNEL_MIN     0
+#define BLE_DATA_CHANNEL_MAX     36
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -109,6 +115,56 @@ struct ble_buf_list {
 };
 
 /*---------------------------------------------------------------------------*/
+/* Extension of the RADIO_PARAM fields for the BLE radios                    */
+enum {
+    /* start with 100 to be sure to not interfere with the standard values*/
+
+    /*-----------------------------------------------------------------------*/
+    /* BLE controller general                                                */
+    /* The bluetooth device address */
+    RADIO_CONST_BLE_BD_ADDR = 100,
+
+    /* the size of a single BLE command buffer */
+    RADIO_CONST_BLE_BUFFER_SIZE,
+
+    /* the amount of single BLE command buffers */
+    RADIO_CONST_BLE_BUFFER_AMOUNT,
+
+    /*-----------------------------------------------------------------------*/
+    /* BLE advertisement                                                     */
+
+    /* minimum advertisement interval
+     * value can range from RADIO_CONST_BLE_ADV_INTERVAL_MIN to
+     * RADIO_CONST_BLE_ADV_INTERVAL_MAX and must not be greater than
+     * RADIO_RARAM_BLE_ADV_INTERVAL_MAX */
+    RADIO_PARAM_BLE_ADV_INTERVAL,
+
+    /* minimum advertisement interval according to standard */
+    RADIO_CONST_BLE_ADV_INTERVAL_MIN,
+
+    /* maximum advertisement interval according to standard */
+    RADIO_CONST_BLE_ADV_INTERVAL_MAX,
+
+    /* BLE advertisement type (directed/undirected, ...) */
+    RADIO_PARAM_BLE_ADV_TYPE,
+
+    /* type of own address during advertisement */
+    RADIO_PARAM_BLE_ADV_OWN_ADDR_TYPE,
+
+    /* advertisement channel map */
+    RADIO_PARAM_BLE_ADV_CHANNEL_MAP,
+
+    /* advertisement payload */
+    RADIO_PARAM_BLE_ADV_PAYLOAD,
+
+    /* scan response payload */
+    RADIO_PARAM_BLE_ADV_SCAN_RESPONSE,
+
+    /* 1: enable advertisement / 0: disable advertisement */
+    RADIO_PARAM_BLE_ADV_ENABLE
+};
+
+/*---------------------------------------------------------------------------*/
 /**
  * The structure of a ble radio controller driver in Contiki.
  */
@@ -146,16 +202,11 @@ struct ble_controller_driver {
      *                     (interval = adv_interval * 0.625 ms)
      * \param type type of advertising
      * \param own_addr_type indicator if own address is public/random
-     * \param dir_addr_type indicator if directed address is public/random
-     * \param dir_addr directed address
      * \param adv_channel_map map of advertising channels to use
      */
-    // TODO: include advertising filter policy
     ble_result_t (* set_adv_param) (unsigned int adv_interval,
                                         ble_adv_type_t type,
                                         ble_addr_type_t own_addr_type,
-                                        ble_addr_type_t dir_addr_type,
-                                        ble_addr_t dir_addr,
                                         unsigned short adv_channel_map);
 
     /**
@@ -270,7 +321,7 @@ struct ble_controller_driver {
     ble_result_t (* disconnect) (unsigned int connection_handle,
                                  unsigned short reason);
 
-    ble_result_t (* send) (void);
+    ble_result_t (* send) (void *buf, unsigned short buf_len);
 
     ble_result_t (* send_list) (struct ble_buf_list *list);
 };
