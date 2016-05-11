@@ -35,79 +35,32 @@
  */
 
 #include "net/framer-ble.h"
-#include "net/frame-ble.h"
-
-#include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
-#define PRINTADDR(addr) PRINTF(" %02X:%02X:%02X:%02X:%02X:%02X ", ((uint8_t *)addr)[5], ((uint8_t *)addr)[4], ((uint8_t *)addr)[3], ((uint8_t *)addr)[2], ((uint8_t *)addr)[1], ((uint8_t *)addr)[0])
-
 #else
 #define PRINTF(...)
-#define PRINTADDR(addr)
 #endif
-/*---------------------------------------------------------------------------*/
-struct ble_hdr {
-    uint8_t llid;
-};
 /*---------------------------------------------------------------------------*/
 int length(void)
 {
-    return sizeof(struct ble_hdr);
+    return 0;
 }
 
 /*---------------------------------------------------------------------------*/
 int create(void)
 {
-    struct ble_hdr *hdr;
-    uint8_t type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
-
-    if(packetbuf_hdralloc(sizeof(struct ble_hdr)) == 0)
-    {
-        PRINTF("framer-ble: header is too large\n");
-        return FRAMER_FAILED;
-    }
-    hdr = packetbuf_hdrptr();
-
-    switch (type)
-    {
-    case FRAME_BLE_TYPE_DATA_LL_CTRL:
-        hdr->llid = FRAME_BLE_DATA_PDU_LLID_CONTROL;
-        break;
-    case FRAME_BLE_TYPE_DATA_LL_MSG:
-        hdr->llid = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
-        break;
-    case FRAME_BLE_TYPE_DATA_LL_FRAG:
-        hdr->llid = FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT;
-        break;
-    default:
-        PRINTF("framer-ble create() invalid frame type\n");
-        return FRAMER_FAILED;
-    }
-
-    return sizeof(struct ble_hdr);
+    return 0;
 }
 
 
 /*---------------------------------------------------------------------------*/
 int parse(void)
 {
-    frame_ble_t frame;
-    int hdr_len;
-
-    hdr_len = frame_ble_parse(packetbuf_dataptr(), packetbuf_datalen(), &frame);
-
-    if(hdr_len && packetbuf_hdrreduce(hdr_len))
-    {
-        packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, frame.frame_type);
-        PRINTF("FRAMER: parse: type: %d\n", frame.frame_type);
-        return hdr_len;
-    }
-    return FRAMER_FAILED;
+    return 0;
 }
 
 /*---------------------------------------------------------------------------*/

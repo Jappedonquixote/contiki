@@ -65,54 +65,16 @@ init(void)
 }
 /*---------------------------------------------------------------------------*/
 static int
-prepare(const void *payload, unsigned short payload_len)
-{
-    PRINTF("ble-mode prepare()\n");
-    return 1;
-}
-/*---------------------------------------------------------------------------*/
-static int
-transmit(unsigned short transmit_len)
-{
-    PRINTF("ble-mode transmit()\n");
-    return 1;
-}
-/*---------------------------------------------------------------------------*/
-static int
 send(const void *payload, unsigned short payload_len)
 {
+    uint8_t res;
     PRINTF("ble-mode send()\n");
-    ble_controller.send((void *) payload, payload_len);
-    /* always return ok, since the BLE controller handles retransmissions */
-    return RADIO_TX_OK;
-}
-/*---------------------------------------------------------------------------*/
-static int
-read_frame(void *buf, unsigned short buf_len)
-{
-    PRINTF("ble-mode read_frame()\n");
-    return 0;
-}
-/*---------------------------------------------------------------------------*/
-static int
-channel_clear(void)
-{
-    PRINTF("ble-mode channel_clear()\n");
-    return 1;
-}
-/*---------------------------------------------------------------------------*/
-static int
-receiving_packet(void)
-{
-    PRINTF("ble-mode receiving_packet()\n");
-    return 0;
-}
-/*---------------------------------------------------------------------------*/
-static int
-pending_packet(void)
-{
-    PRINTF("ble-mode pending_packet()\n");
-    return 0;
+    res = ble_controller.send((void *) payload, payload_len);
+    if(res == BLE_RESULT_OK) {
+        return RADIO_TX_OK;
+    } else {
+        return RADIO_TX_ERR;
+    }
 }
 /*---------------------------------------------------------------------------*/
 static int
@@ -151,24 +113,6 @@ get_value(radio_param_t param, radio_value_t *value)
         return RADIO_RESULT_OK;
     case RADIO_CONST_BLE_BUFFER_AMOUNT:
         ble_controller.read_buffer_size(&temp, (unsigned int *) value);
-        return RADIO_RESULT_OK;
-    case RADIO_CONST_BLE_ADV_INTERVAL_MIN:
-        *value = BLE_ADV_INTERVAL_MIN;
-        return RADIO_RESULT_OK;
-    case RADIO_CONST_BLE_ADV_INTERVAL_MAX:
-        *value = BLE_ADV_INTERVAL_MAX;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_INTERVAL:
-        *value = adv_interval;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_TYPE:
-        *value = adv_type;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_OWN_ADDR_TYPE:
-        *value = adv_own_addr_type;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_CHANNEL_MAP:
-        *value = adv_channel_map;
         return RADIO_RESULT_OK;
     default:
         return RADIO_RESULT_NOT_SUPPORTED;
@@ -248,13 +192,13 @@ set_object(radio_param_t param, const void *src, size_t size)
 /*---------------------------------------------------------------------------*/
 const struct radio_driver ble_mode_driver = {
   init,
-  prepare,
-  transmit,
+  NULL,
+  NULL,
   send,
-  read_frame,
-  channel_clear,
-  receiving_packet,
-  pending_packet,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
   on,
   off,
   get_value,

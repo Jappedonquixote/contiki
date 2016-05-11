@@ -458,27 +458,46 @@ static ble_result_t disconnect(unsigned int connection_handle,
 }
 
 /*---------------------------------------------------------------------------*/
-static ble_result_t send(void *buf, unsigned short buf_len)
+static tx_buf_t* prepare_tx_buf()
 {
     tx_buf_t *tx_buf;
-    rfc_dataEntryGeneral_t *e;
 
     /* allocate a TX buffer */
     tx_buf = memb_alloc(&tx_buffers);
-    if(tx_buf == NULL) {
-        PRINTF("send() could not allocate tx buffer\n");
-        return BLE_RESULT_ERROR;
+    if(tx_buf != NULL) {
+        list_add(tx_buffers_queued, tx_buf);
     }
-    list_add(tx_buffers_queued, tx_buf);
-    e = (rfc_dataEntryGeneral_t *) tx_buf;
+    return tx_buf;
+}
 
+/*---------------------------------------------------------------------------*/
+static void prepare_tx_buf_payload(tx_buf_t *tx_buf, void *buf,
+        unsigned short buf_len, unsigned short frame_type) {
 
-    e->length = buf_len;
+    rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) tx_buf;
+
+    /* the buffer length does not contain the frame type byte */
+    e->length = buf_len + 1;
     e->config.lenSz = 1;
     e->pNextEntry = NULL;
 
-    /* set the information payload */
-    memcpy(&tx_buf->data[8], buf, buf_len);
+    /* set the frame type */
+    memset(&tx_buf->data[8], frame_type, 1);
+
+    /* set frame payload */
+    memcpy(&tx_buf->data[9], buf, buf_len);
+}
+
+/*---------------------------------------------------------------------------*/
+static ble_result_t send(void *buf, unsigned short buf_len)
+{
+    tx_buf_t *tx_buf = prepare_tx_buf();
+    if(tx_buf == NULL) {
+        PRINTF("send() could not allocate TX buffer\n");
+        return BLE_RESULT_ERROR;
+    }
+
+    prepare_tx_buf_payload(tx_buf, buf, buf_len, FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE);
 
     if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
         PRINTF("send() could not add buffer to tx data queue\n");
@@ -537,13 +556,12 @@ static void parse_connect_request_data(ble_conn_param_t *p, uint8_t *entry)
                                entry[offset + 24];
 }
 /*---------------------------------------------------------------------------*/
-static void free_finished_rx_bufs(void)
+static void free_finished_rx_buf(void)
 {
     rfc_dataEntryGeneral_t *entry;
 
     /* free finished RX entries */
     entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
-    while(entry->status == DATA_ENTRY_FINISHED) {
         /* clear the length field */
         current_rx_entry[8] = 0;
         /* set status to pending */
@@ -551,7 +569,7 @@ static void free_finished_rx_bufs(void)
         /* set next data queue entry */
         current_rx_entry = entry->pNextEntry;
         entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
-    }
+//    }
 }
 /*---------------------------------------------------------------------------*/
 static void free_finished_tx_bufs(void)
@@ -665,8 +683,9 @@ static void state_advertising(process_event_t ev, process_data_t data,
                 /* in this case the first anchor point starts too early,
                  * ignore the first conn event and start with the 2nd */
                 conn_event.counter++;
-                conn_event.mapped_channel = (conn_event.mapped_channel + conn_param.hop) % 37;
+                update_data_channel();
                 first_conn_event_anchor += conn_param.interval;
+                PRINTF("skipping first anchor point\n");
             }
             conn_event.start = first_conn_event_anchor;
 
@@ -689,17 +708,19 @@ static void state_advertising(process_event_t ev, process_data_t data,
             rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR);
 
             state = BLE_CONTROLLER_STATE_CONN_SLAVE;
+            /* clear the output buffer, so that the counters are actually correct*/
+            memset(output_buf, 0x00, sizeof(output_buf));
         }
-        free_finished_rx_bufs();
+        free_finished_rx_buf();
     }
 }
 /*---------------------------------------------------------------------------*/
-void process_ll_ctrl_msg(void)
+void process_ll_ctrl_msg(uint8_t *data)
 {
     uint8_t resp_len = 0;
     uint8_t resp_data[26];
     /* the first 2 bytes in the packet buffer are the header */
-    uint8_t *data = packetbuf_dataptr() + 2;
+//    uint8_t *data = packetbuf_dataptr() + 2;
     uint8_t op_code = data[0];
 
     uint64_t channel_map = 0;
@@ -721,25 +742,34 @@ void process_ll_ctrl_msg(void)
         }
 
     } else if(op_code == BLE_LL_FEATURE_REQ) {
-        resp_data[0] = FRAME_BLE_DATA_PDU_LLID_CONTROL;
-        resp_data[1] = BLE_LL_FEATURE_RSP;
-        memset(&resp_data[2], 0x00, 8);
-        resp_len = 10;
+        resp_data[0] = BLE_LL_FEATURE_RSP;
+        memset(&resp_data[1], 0x00, 8);
+        resp_len = 9;
     } else if(op_code == BLE_LL_VERSION_IND) {
-        resp_data[0] = FRAME_BLE_DATA_PDU_LLID_CONTROL;
-        resp_data[1] = BLE_LL_VERSION_IND;
-        resp_data[2] = BLE_VERSION_NR;
-        resp_data[3] = (BLE_COMPANY_ID >> 8) & 0xFF;
-        resp_data[4] = BLE_COMPANY_ID & 0xFF;
-        resp_data[5] = (BLE_SUB_VERSION_NR >> 8) & 0xFF;
-        resp_data[6] = BLE_SUB_VERSION_NR & 0xFF;
-        resp_len = 7;
+        resp_data[0] = BLE_LL_VERSION_IND;
+        resp_data[1] = BLE_VERSION_NR;
+        resp_data[2] = (BLE_COMPANY_ID >> 8) & 0xFF;
+        resp_data[3] = BLE_COMPANY_ID & 0xFF;
+        resp_data[4] = (BLE_SUB_VERSION_NR >> 8) & 0xFF;
+        resp_data[5] = BLE_SUB_VERSION_NR & 0xFF;
+        resp_len = 6;
     } else {
         PRINTF("parse_ll_ctrl_msg() opcode: 0x%02X received\n", op_code);
     }
 
     if(resp_len > 0) {
-        ble_controller.send((void *) resp_data, resp_len);
+        tx_buf_t *tx_buf = prepare_tx_buf();
+        if(tx_buf == NULL) {
+            PRINTF("process_ll_ctrl_msg() could not allocate TX buffer\n");
+            return;
+        }
+
+        prepare_tx_buf_payload(tx_buf, resp_data, resp_len, FRAME_BLE_DATA_PDU_LLID_CONTROL);
+
+        if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
+            PRINTF("process_ll_ctrl_msg() could not add buffer to tx data queue\n");
+            return;
+        }
     }
 }
 /*---------------------------------------------------------------------------*/
@@ -747,45 +777,64 @@ static void process_rx_entry_data_channel(void)
 {
     uint8_t data_offset = 9;                     // start index of BLE data
     uint8_t data_len;
-    uint8_t hdr_len;
     uint8_t rssi;
     uint8_t channel;
+    uint8_t frame_type;
+    uint8_t next_frame_type;
+    uint8_t more_data;
 
     rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
     if(entry->status != DATA_ENTRY_FINISHED) {
         return;
     }
 
-    /* the last 6 bytes of the data are status and timestamp bytes */
-    data_len = current_rx_entry[8] - 6;
+    while(entry->status == DATA_ENTRY_FINISHED) {
+        /* the last 6 bytes of the data are status and timestamp bytes */
+        data_len = current_rx_entry[8] - 6 - 2;
 
-    if(data_len > 0) {
+        if (data_len > 0) {
+            frame_type = (current_rx_entry[data_offset] & 0x03);
+            more_data = (current_rx_entry[data_offset] & 0x10) >> 4;
+            if(more_data) {
+                next_frame_type = (entry->pNextEntry[data_offset] & 0x03);
+            }
 
-        /* copy payload in packetbuffer */
-        packetbuf_copyfrom(&current_rx_entry[data_offset], data_len);
+            /* process the received data */
+            if (frame_type == FRAME_BLE_DATA_PDU_LLID_CONTROL) {
+                /* received frame is a LL control frame */
+                /* exclude the header (first 2 bytes) */
+                process_ll_ctrl_msg(&current_rx_entry[data_offset + 2]);
+            }
+            else if(frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE) {
+                /* message start or complete message */
+                packetbuf_clear();
+                memcpy(packetbuf_dataptr(), &current_rx_entry[data_offset + 2], data_len);
+                packetbuf_set_datalen(data_len);
+                /* set the controller dependent attributes */
+                rssi = current_rx_entry[data_offset + data_len];
+                channel = (current_rx_entry[data_offset + data_len + 1] & 0x1F);
+                packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
+                packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
 
-        /* set the controller dependent attributes */
-        rssi = current_rx_entry[data_offset + data_len];
-        channel = (current_rx_entry[data_offset + data_len + 1] & 0x1F);
-        packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
-        packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
-
-        if(hdr_len < 0)
-        {
-            PRINTF("could not parse data mapped_channel packet\n");
-            return;
+                /* notify upper layers, if complete message was received */
+                if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
+                    NETSTACK_RDC.input();
+                }
+            }
+            else if(frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT) {
+                /* message fragment */
+                memcpy((packetbuf_dataptr() + packetbuf_datalen()), &current_rx_entry[data_offset + 2], data_len);
+                packetbuf_set_datalen(packetbuf_datalen() + data_len);
+                /* notify upper layers, if complete message was received */
+                if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
+                    NETSTACK_RDC.input();
+                }
+            }
         }
-
-        if((current_rx_entry[data_offset] & 0x03) ==
-            FRAME_BLE_DATA_PDU_LLID_CONTROL) {
-            /* received frame is a LL control frame */
-            process_ll_ctrl_msg();
-        } else {
-            /* LLID messages and fragments are handled in the upper layers */
-            NETSTACK_RDC.input();
-        }
+        free_finished_rx_buf();
     }
 }
+
 /*---------------------------------------------------------------------------*/
 static void
 state_conn_slave(process_event_t ev, process_data_t data,
@@ -838,8 +887,6 @@ state_conn_slave(process_event_t ev, process_data_t data,
         }
     } else if(ev == rf_core_data_rx_event) {
         process_rx_entry_data_channel();
-        free_finished_rx_bufs();
-
     } else if(ev == rf_core_data_tx_event) {
         free_finished_tx_bufs();
     }
