@@ -474,10 +474,12 @@ static tx_buf_t* prepare_tx_buf()
 static void prepare_tx_buf_payload(tx_buf_t *tx_buf, void *buf,
         unsigned short buf_len, unsigned short frame_type) {
 
+    uint8_t length = MIN(buf_len, 27);
+
     rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) tx_buf;
 
     /* the buffer length does not contain the frame type byte */
-    e->length = buf_len + 1;
+    e->length = length + 1;
     e->config.lenSz = 1;
     e->pNextEntry = NULL;
 
@@ -485,24 +487,37 @@ static void prepare_tx_buf_payload(tx_buf_t *tx_buf, void *buf,
     memset(&tx_buf->data[8], frame_type, 1);
 
     /* set frame payload */
-    memcpy(&tx_buf->data[9], buf, buf_len);
+    memcpy(&tx_buf->data[9], buf, length);
 }
 
 /*---------------------------------------------------------------------------*/
 static ble_result_t send(void *buf, unsigned short buf_len)
 {
-    tx_buf_t *tx_buf = prepare_tx_buf();
-    if(tx_buf == NULL) {
-        PRINTF("send() could not allocate TX buffer\n");
-        return BLE_RESULT_ERROR;
+    tx_buf_t *tx_buf;
+    uint8_t i;
+    uint8_t frame_type;
+
+    for(i = 0; i < buf_len; i += 27) {
+        tx_buf = prepare_tx_buf();
+        if(tx_buf == NULL) {
+            PRINTF("send() could not allocate TX buffer\n");
+            return BLE_RESULT_ERROR;
+        }
+
+        if(i == 0) {
+            frame_type = FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE;
+        } else {
+            frame_type = FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT;
+        }
+
+        prepare_tx_buf_payload(tx_buf, &buf[i], (buf_len - i), frame_type);
+
+        if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
+            PRINTF("send() could not add buffer to tx data queue\n");
+            return BLE_RESULT_ERROR;
+        }
     }
 
-    prepare_tx_buf_payload(tx_buf, buf, buf_len, FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE);
-
-    if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
-        PRINTF("send() could not add buffer to tx data queue\n");
-        return BLE_RESULT_ERROR;
-    }
 
     return BLE_RESULT_OK;
 }
@@ -562,14 +577,13 @@ static void free_finished_rx_buf(void)
 
     /* free finished RX entries */
     entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
-        /* clear the length field */
-        current_rx_entry[8] = 0;
-        /* set status to pending */
-        entry->status = DATA_ENTRY_PENDING;
-        /* set next data queue entry */
-        current_rx_entry = entry->pNextEntry;
-        entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
-//    }
+    /* clear the length field */
+    current_rx_entry[8] = 0;
+    /* set status to pending */
+    entry->status = DATA_ENTRY_PENDING;
+    /* set next data queue entry */
+    current_rx_entry = entry->pNextEntry;
+    entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
 }
 /*---------------------------------------------------------------------------*/
 static void free_finished_tx_bufs(void)
@@ -784,6 +798,7 @@ static void process_rx_entry_data_channel(void)
     uint8_t more_data;
 
     rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
+    rfc_dataEntryGeneral_t *next_entry = (rfc_dataEntryGeneral_t *) entry->pNextEntry;
     if(entry->status != DATA_ENTRY_FINISHED) {
         return;
     }
@@ -795,8 +810,10 @@ static void process_rx_entry_data_channel(void)
         if (data_len > 0) {
             frame_type = (current_rx_entry[data_offset] & 0x03);
             more_data = (current_rx_entry[data_offset] & 0x10) >> 4;
-            if(more_data) {
+            if(more_data && next_entry->status == DATA_ENTRY_FINISHED) {
                 next_frame_type = (entry->pNextEntry[data_offset] & 0x03);
+            } else {
+                next_frame_type = 0;
             }
 
             /* process the received data */
@@ -825,6 +842,7 @@ static void process_rx_entry_data_channel(void)
                 /* message fragment */
                 memcpy((packetbuf_dataptr() + packetbuf_datalen()), &current_rx_entry[data_offset + 2], data_len);
                 packetbuf_set_datalen(packetbuf_datalen() + data_len);
+
                 /* notify upper layers, if complete message was received */
                 if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
                     NETSTACK_RDC.input();
