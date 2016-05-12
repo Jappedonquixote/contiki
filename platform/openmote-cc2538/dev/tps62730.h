@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, Swedish Institute of Computer Science.
+ * Copyright (c) 2014, OpenMote Technologies, S.L.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,87 +29,46 @@
  * This file is part of the Contiki operating system.
  *
  */
-
+/*---------------------------------------------------------------------------*/
 /**
+ * \addtogroup openmote-cc2538
+ * @{
+ *
+ * \defgroup openmote-tps62730 TPS62730 voltage regulator
+ *
+ * Driver for the TPS62730 voltage regulator, to enable power from
+ * the battery voltage (bypass, Vout=Vin, Iq < 1uA) or through the
+ * buck regulator (on, Vout=2.1V, Iq = 30uA)
+ * @{
+ *
  * \file
- *         A test program for Deluge.
+ * Driver for the TPS62730 voltage regulator
+ *
  * \author
- *         Nicolas Tsiftes <nvt@sics.se>
+ * Pere Tuset <peretuset@openmote.com>
  */
-
-#include "contiki.h"
-#include "cfs/cfs.h"
-#include "deluge.h"
-#include "sys/node-id.h"
-
-#include <stdio.h>
-#include <string.h>
-
-#ifndef SINK_ID
-#define SINK_ID	1
-#endif
-
-#ifndef FILE_SIZE
-#define FILE_SIZE 1000
-#endif
-
-PROCESS(deluge_test_process, "Deluge test process");
-AUTOSTART_PROCESSES(&deluge_test_process);
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(deluge_test_process, ev, data)
-{
-  int fd, r;
-  char buf[32];
-  static struct etimer et;
-
-  PROCESS_BEGIN();
-
-  memset(buf, 0, sizeof(buf));
-  if(node_id == SINK_ID) {
-    strcpy(buf, "This is version 1 of the file");
-  } else {
-    strcpy(buf, "This is version 0 of the file");
-  }
-
-  cfs_remove("test");
-  fd = cfs_open("test", CFS_WRITE);
-  if(fd < 0) {
-    process_exit(NULL);
-  }
-  if(cfs_write(fd, buf, sizeof(buf)) != sizeof(buf)) {
-    cfs_close(fd);
-    process_exit(NULL);
-  }
-
-  if(cfs_seek(fd, FILE_SIZE, CFS_SEEK_SET) != FILE_SIZE) {
-    printf("failed to seek to the end\n");
-  }
-
-  deluge_disseminate("test", node_id == SINK_ID);
-  cfs_close(fd);
-
-  etimer_set(&et, CLOCK_SECOND * 5);
-  for(;;) {
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-    if(node_id != SINK_ID) {
-      fd = cfs_open("test", CFS_READ);
-      if(fd < 0) {
-        printf("failed to open the test file\n");
-      } else {
-        r = cfs_read(fd, buf, sizeof(buf));
-	buf[sizeof(buf) - 1] = '\0';
-	if(r <= 0) {
-	  printf("failed to read data from the file\n");
-	} else {
-	  printf("File contents: %s\n", buf);
-	}
-	cfs_close(fd);
-      }
-    }
-    etimer_reset(&et);
-  }
-
-
-  PROCESS_END();
-}
+#ifndef TPS62730_H_
+#define TPS62730_H_
 /*---------------------------------------------------------------------------*/
+/**
+ * \brief Initialize the TPS62730 voltage regulator in bypass mode
+ */
+void tps62730_init(void);
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Set TPS62730 to on, Vout = 2.2V, Iq = 30 uA
+ */
+void tps62730_on(void);
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Set TPS62730 to bypass, Vout = Vin, Iq < 1 uA
+ */
+void tps62730_bypass(void);
+/*---------------------------------------------------------------------------*/
+#endif /* TPS62730_H_ */
+/*---------------------------------------------------------------------------*/
+/**
+ * @}
+ * @}
+ */

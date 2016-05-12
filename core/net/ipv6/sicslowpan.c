@@ -92,12 +92,6 @@ void uip_log(char *msg);
 #define UIP_LOG(m)
 #endif /* UIP_LOGGING == 1 */
 
-#ifdef SICSLOWPAN_CONF_MAX_MAC_TRANSMISSIONS
-#define SICSLOWPAN_MAX_MAC_TRANSMISSIONS SICSLOWPAN_CONF_MAX_MAC_TRANSMISSIONS
-#else
-#define SICSLOWPAN_MAX_MAC_TRANSMISSIONS 4
-#endif
-
 #ifndef SICSLOWPAN_COMPRESSION
 #ifdef SICSLOWPAN_CONF_COMPRESSION
 #define SICSLOWPAN_COMPRESSION SICSLOWPAN_CONF_COMPRESSION
@@ -1290,9 +1284,6 @@ output(const uip_lladdr_t *localdest)
   packetbuf_clear();
   packetbuf_ptr = packetbuf_dataptr();
 
-  packetbuf_set_attr(PACKETBUF_ATTR_MAX_MAC_TRANSMISSIONS,
-                     SICSLOWPAN_MAX_MAC_TRANSMISSIONS);
-
   if(callback) {
     /* call the attribution when the callback comes, but set attributes
        here ! */
@@ -1757,8 +1748,8 @@ sicslowpan_init(void)
 #ifdef SICSLOWPAN_CONF_ADDR_CONTEXT_0
   SICSLOWPAN_CONF_ADDR_CONTEXT_0;
 #else
-  addr_contexts[0].prefix[0] = 0xaa;
-  addr_contexts[0].prefix[1] = 0xaa;
+  addr_contexts[0].prefix[0] = UIP_DS6_DEFAULT_PREFIX_0;
+  addr_contexts[0].prefix[1] = UIP_DS6_DEFAULT_PREFIX_1;
 #endif
 #endif /* SICSLOWPAN_CONF_MAX_ADDR_CONTEXTS > 0 */
 
