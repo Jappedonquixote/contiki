@@ -39,6 +39,8 @@
 
 #include <stddef.h>
 
+#include "ble-addr.h"
+
 /*---------------------------------------------------------------------------*/
 /* Advertisement channel definitions                                         */
 #define BLE_ADV_DATA_LEN         31
@@ -67,17 +69,6 @@ typedef enum {
     BLE_RESULT_ERROR
 } ble_result_t;
 
-/*---------------------------------------------------------------------------*/
-/* BLE device address type */
-#define BLE_ADDR_SIZE 6
-typedef char ble_addr_t[BLE_ADDR_SIZE];
-
-/*---------------------------------------------------------------------------*/
-/* Type of BLE device address */
-typedef enum {
-    BLE_ADDR_TYPE_PUBLIC,
-    BLE_ADDR_TYPE_RANDOM
-} ble_addr_type_t;
 
 /*---------------------------------------------------------------------------*/
 /* Advertising modes of BLE */
@@ -182,7 +173,7 @@ struct ble_controller_driver {
      *
      * \param addr the static device address
      */
-    ble_result_t (* read_bd_addr)(ble_addr_t *addr);
+    ble_result_t (* read_bd_addr)(uint8_t *addr);
 
     /**
      * Reads the size of the data buffers.
@@ -286,7 +277,7 @@ struct ble_controller_driver {
     ble_result_t (* create_connection) (unsigned int scan_interval,
                                            unsigned int scan_window,
                                            ble_addr_type_t peer_addr_type,
-                                           ble_addr_t peer_addr,
+                                           uint8_t *peer_addr,
                                            ble_addr_type_t own_addr_type,
                                            unsigned int conn_interval,
                                            unsigned int conn_latency,

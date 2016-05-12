@@ -49,6 +49,7 @@
 #include "dev/watchdog.h"
 #include "dev/oscillators.h"
 #include "ieee-addr.h"
+#include "ble-addr.h"
 #include "vims.h"
 #include "dev/cc26xx-uart.h"
 #include "dev/soc-rtc.h"
@@ -95,7 +96,9 @@ set_rf_params(void)
   uint8_t ext_addr[8];
   radio_value_t val = 0;
 
-  ieee_addr_cpy_to(ext_addr, 8);
+//  ieee_addr_cpy_to(ext_addr, 8);
+  ble_eui64_addr_cpy_to(ext_addr);
+//  ble_addr_cpy_to(ext_addr);
 
   short_addr = ext_addr[7];
   short_addr |= ext_addr[6] << 8;
@@ -103,13 +106,13 @@ set_rf_params(void)
   /* Populate linkaddr_node_addr. Maintain endianness */
   memcpy(&linkaddr_node_addr, &ext_addr[8 - LINKADDR_SIZE], LINKADDR_SIZE);
 
-  NETSTACK_RADIO.set_value(RADIO_PARAM_PAN_ID, IEEE802154_PANID);
-  NETSTACK_RADIO.set_value(RADIO_PARAM_16BIT_ADDR, short_addr);
-  NETSTACK_RADIO.set_value(RADIO_PARAM_CHANNEL, RF_CORE_CHANNEL);
+//  NETSTACK_RADIO.set_value(RADIO_PARAM_PAN_ID, IEEE802154_PANID);
+//  NETSTACK_RADIO.set_value(RADIO_PARAM_16BIT_ADDR, short_addr);
+//  NETSTACK_RADIO.set_value(RADIO_PARAM_CHANNEL, RF_CORE_CHANNEL);
   NETSTACK_RADIO.set_object(RADIO_PARAM_64BIT_ADDR, ext_addr, 8);
 
-  NETSTACK_RADIO.get_value(RADIO_PARAM_CHANNEL, &val);
-  printf(" RF: Channel %d\n", val);
+//  NETSTACK_RADIO.get_value(RADIO_PARAM_CHANNEL, &val);
+//  printf(" RF: Channel %d\n", val);
 
 #if STARTUP_CONF_VERBOSE
   {

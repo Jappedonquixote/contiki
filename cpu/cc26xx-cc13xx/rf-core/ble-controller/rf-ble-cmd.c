@@ -303,7 +303,7 @@ void rf_ble_cmd_create_adv_cmd(uint8_t *command, uint8_t channel,
 void rf_ble_cmd_create_adv_params(uint8_t *param, dataQueue_t *rx_queue,
                            uint8_t adv_data_len, uint8_t *adv_data,
                            uint8_t scan_resp_data_len, uint8_t *scan_resp_data,
-                           ble_addr_type_t own_addr_type, ble_addr_t own_addr)
+                           ble_addr_type_t own_addr_type, uint8_t *own_addr)
 {
     rfc_bleAdvPar_t *p = (rfc_bleAdvPar_t *) param;
 
@@ -362,7 +362,7 @@ void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
     p->pRxQ = rx_queue;
     p->pTxQ = tx_queue;
     p->rxConfig.bAutoFlushIgnored = 1;
-    p->rxConfig.bAutoFlushCrcErr = 0;
+    p->rxConfig.bAutoFlushCrcErr = 1;
     p->rxConfig.bAutoFlushEmpty = 1;
     p->rxConfig.bIncludeLenByte = 1;
     p->rxConfig.bIncludeCrc = 0;

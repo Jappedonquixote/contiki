@@ -41,6 +41,8 @@
 #include "dev/ble-controller.h"
 #include "dev/oscillators.h"
 
+#include "ble-addr.h"
+
 #include "net/netstack.h"
 #include "net/packetbuf.h"
 #include "net/frame-ble.h"
@@ -324,9 +326,9 @@ static ble_result_t reset(void)
 }
 
 /*---------------------------------------------------------------------------*/
-static ble_result_t read_bd_addr(ble_addr_t *addr)
+static ble_result_t read_bd_addr(uint8_t *addr)
 {
-    memcpy(addr, (uint8_t *) BLE_ADDR_LOCATION, BLE_ADDR_SIZE);
+    ble_addr_cpy_to(addr);
     return BLE_RESULT_OK;
 }
 
@@ -422,7 +424,7 @@ static ble_result_t set_scan_enable(unsigned short enable,
 static ble_result_t create_connection(unsigned int scan_interval,
                                          unsigned int scan_window,
                                          ble_addr_type_t peer_addr_type,
-                                         ble_addr_t peer_addr,
+                                         uint8_t *peer_addr,
                                          ble_addr_type_t own_addr_type,
                                          unsigned int conn_interval,
                                          unsigned int conn_latency,

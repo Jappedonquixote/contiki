@@ -29,45 +29,51 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * rf-ble-cmd.h
+ * ble-addr.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_RF_BLE_CMD_H_
-#define CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_RF_BLE_CMD_H_
+#ifndef BLE_ADDR_H_
+#define BLE_ADDR_H_
+/*---------------------------------------------------------------------------*/
+#include "contiki-conf.h"
 
-#include "rf-core/api/common_cmd.h"
-#include "dev/ble-controller.h"
-#include "ble-addr.h"
+#include <stdint.h>
+/*---------------------------------------------------------------------------*/
+/**
+ * \name BLE address locations
+ *
+ * @{
+ */
+#define BLE_ADDR_LOCATION   0x500012E8 /**< Primary BLE address location */
 
-#define RF_BLE_CMD_OK    1
-#define RF_BLE_CMD_ERROR 0
+/*---------------------------------------------------------------------------*/
+/* BLE device address size */
+#define BLE_ADDR_SIZE 6
+
+/*---------------------------------------------------------------------------*/
+/* Type of BLE device address */
+typedef enum {
+    BLE_ADDR_TYPE_PUBLIC,
+    BLE_ADDR_TYPE_RANDOM
+} ble_addr_type_t;
 
 
-unsigned short rf_ble_cmd_send(uint8_t *cmd);
+/** @} */
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Copy the node's BLE address to a destination memory area
+ * \param dst A pointer to the destination area where the IEEE address is to be
+ *            written
+ *
+ * This function will copy 6 bytes and it will invert byte order in
+ * the process. The factory address on devices is normally little-endian,
+ * therefore you should expect dst to store the address in a big-endian order.
+ */
+void ble_addr_cpy_to(uint8_t *dst);
 
-unsigned short rf_ble_cmd_wait(uint8_t *cmd);
+void ble_eui64_addr_cpy_to(uint8_t *dst);
+/*---------------------------------------------------------------------------*/
 
-unsigned short rf_ble_cmd_setup_ble_mode(void);
-
-void rf_ble_cmd_create_adv_cmd(uint8_t *command, uint8_t channel,
-                               uint8_t *param, uint8_t *output);
-
-void rf_ble_cmd_create_adv_params(uint8_t *param, dataQueue_t *rx_queue,
-                           uint8_t adv_data_len, uint8_t *adv_data,
-                           uint8_t scan_resp_data_len, uint8_t *scan_resp_data,
-                           ble_addr_type_t own_addr_type, uint8_t *own_addr);
-
-void rf_ble_cmd_create_slave_cmd(uint8_t *cmd, uint8_t channel, uint8_t *params,
-                                 uint8_t *output, uint32_t start_time);
-
-void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
-                         dataQueue_t *tx_queue, uint32_t access_address,
-                         uint8_t crc_init_0, uint8_t crc_init_1,
-                         uint8_t crc_init_2, uint32_t win_size,
-                         uint32_t window_widening, uint8_t first_packet);
-
-unsigned short rf_ble_cmd_add_data_queue_entry(dataQueue_t *q, uint8_t *e);
-
-#endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_CONTROLLER_RF_BLE_CMD_H_ */
+#endif /* BLE_ADDR_H_ */

@@ -73,7 +73,7 @@
 /*---------------------------------------------------------------------------*/
 /* BLE controller */
 /* public device address of BLE controller */
-static ble_addr_t ble_addr;
+static uint8_t ble_addr[BLE_ADDR_SIZE];
 
 /* length of a single BLE controller buffer */
 static int buffer_len;
@@ -178,12 +178,26 @@ static void init(void)
     /* enable advertisement */
     NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_ENABLE, 1);
 }
+/*---------------------------------------------------------------------------*/
+static void prepare_l2cap_header(void) {
+    uint8_t data_len = packetbuf_datalen();
+    void *hdr_ptr;
+
+    // packet length + channel + sdu length
+    packetbuf_hdralloc(6);
+    hdr_ptr = packetbuf_hdrptr();
+
+    memcpy(hdr_ptr, (data_len + 2), 2);
+    memcpy(&hdr_ptr[2], l2cap_router.cid, 2);
+    memcpy(&hdr_ptr[4], data_len, 2);
+}
 
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-//    PRINTF("[ ble-mac ] send()\n");
-//    NETSTACK_RDC.send(sent_callback, ptr);
+    PRINTF("[ ble-mac ] send()\n");
+//    prepare_l2cap_header();
+    NETSTACK_RDC.send(sent_callback, ptr);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -268,7 +282,6 @@ void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
 
     memcpy(&len, &data[0], 2);
     memcpy(&sdu_len, &data[4], 2);
-//    PRINTF(" process_l2cap_frame: length: %d; sdu_length: %d\n", len, sdu_len);
 
     if(sdu_len > (len - 2)) {
         /* the L2CAP message is fragmented */
@@ -290,6 +303,11 @@ static void input(void)
 
     memcpy(&channel_id, &data[2], 2);
 
+    PRINTF("ble-mac input() channel_id: 0x%04X; len: %d\n", channel_id, len);
+
+    // TODO packetbuf_set_addr(PACKETBUF_ADDR_SENDER, (const linkaddr_t *)input_packet.src.identifier);
+    // TODO packetbuf_set_addr(PACKETBUF_ADDR_RECEIVER, &linkaddr_node_addr);
+
     if(len > 0) {
         if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL) {
             process_l2cap_frame_signal_channel(data, len);
@@ -298,7 +316,7 @@ static void input(void)
             process_l2cap_frame_flow_channel(data, len);
         }
         else {
-            PRINTF("ble-mac input: unknown L2CAP channel\n");
+            PRINTF("ble-mac input: unknown L2CAP channel: %x\n", channel_id);
             return;
         }
     }
