@@ -94,7 +94,6 @@ set_rf_params(void)
 {
   uint16_t short_addr;
   uint8_t ext_addr[8];
-  radio_value_t val = 0;
 
 //  ieee_addr_cpy_to(ext_addr, 8);
   ble_eui64_addr_cpy_to(ext_addr);

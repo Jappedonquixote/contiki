@@ -73,6 +73,8 @@ typedef enum {
  */
 void ble_addr_cpy_to(uint8_t *dst);
 
+void ble_addr_to_eui64(uint8_t *dst, uint8_t *src);
+
 void ble_eui64_addr_cpy_to(uint8_t *dst);
 /*---------------------------------------------------------------------------*/
 

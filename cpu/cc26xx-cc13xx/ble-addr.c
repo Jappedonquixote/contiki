@@ -54,16 +54,22 @@ ble_addr_cpy_to(uint8_t *dst)
 }
 
 /*---------------------------------------------------------------------------*/
-void ble_eui64_addr_cpy_to(uint8_t *dst)
+void ble_addr_to_eui64(uint8_t *dst, uint8_t *src)
 {
-    uint8_t *location = (uint8_t *) BLE_ADDR_LOCATION;
-
-    dst[0] = location[5];
-    dst[1] = location[4] | 0x02;
-    dst[2] = location[3];
+    /* insert 0xFFFE in the middle */
+    memcpy(dst, src, 3);
     dst[3] = 0xFF;
     dst[4] = 0xFE;
-    dst[5] = location[2];
-    dst[6] = location[1];
-    dst[7] = location[0];
+    memcpy(&dst[5], &src[3], 3);
+
+    /* flip unique bit */
+    dst[1] |= 0x02;
+}
+
+/*---------------------------------------------------------------------------*/
+void ble_eui64_addr_cpy_to(uint8_t *dst)
+{
+    uint8_t ble_addr[BLE_ADDR_SIZE];
+    ble_addr_cpy_to(ble_addr);
+    ble_addr_to_eui64(dst, ble_addr);
 }

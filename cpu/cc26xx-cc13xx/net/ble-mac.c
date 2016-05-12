@@ -35,7 +35,6 @@
  */
 
 #include "net/ble-mac.h"
-
 #include "net/packetbuf.h"
 #include "net/netstack.h"
 #include "net/frame-ble.h"
@@ -302,11 +301,6 @@ static void input(void)
     uint16_t channel_id;
 
     memcpy(&channel_id, &data[2], 2);
-
-    PRINTF("ble-mac input() channel_id: 0x%04X; len: %d\n", channel_id, len);
-
-    // TODO packetbuf_set_addr(PACKETBUF_ADDR_SENDER, (const linkaddr_t *)input_packet.src.identifier);
-    // TODO packetbuf_set_addr(PACKETBUF_ADDR_RECEIVER, &linkaddr_node_addr);
 
     if(len > 0) {
         if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL) {

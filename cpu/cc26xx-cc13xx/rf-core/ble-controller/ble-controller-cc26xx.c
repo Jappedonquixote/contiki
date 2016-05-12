@@ -116,6 +116,7 @@ static rf_ticks_t adv_event_next;
 #define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 40000   /* 10 ms*/
 
 typedef struct {
+    uint8_t initiator_address[6];
     uint32_t access_address;
     uint8_t crc_init_0;
     uint8_t crc_init_1;
@@ -499,6 +500,11 @@ static ble_result_t send(void *buf, unsigned short buf_len)
     uint8_t i;
     uint8_t frame_type;
 
+    if((state != BLE_CONTROLLER_STATE_CONN_SLAVE) && (BLE_CONTROLLER_STATE_CONN_MASTER)) {
+        PRINTF("send() dropping data due to invalid state\n");
+        return BLE_RESULT_ERROR;
+    }
+
     for(i = 0; i < buf_len; i += 27) {
         tx_buf = prepare_tx_buf();
         if(tx_buf == NULL) {
@@ -554,7 +560,8 @@ const struct ble_controller_driver ble_controller =
 /* The parameter are parsed according to Bluetooth Specification v4 (page 2510)*/
 static void parse_connect_request_data(ble_conn_param_t *p, uint8_t *entry)
 {
-    int offset = 0;
+    int offset = 12;
+    memcpy(p->initiator_address, &entry[0], 6);
     memcpy(&p->access_address, &entry[offset], 4);
     p->crc_init_0 = entry[offset + 4];
     p->crc_init_1 = entry[offset + 5];
@@ -644,7 +651,7 @@ static void state_advertising(process_event_t ev, process_data_t data,
         /* advertising event */
         rf_ble_cmd_create_adv_params(param, &rx_data_queue, adv_data_len,
                 adv_data, scan_resp_data_len, scan_resp_data,
-                adv_param.own_addr_type, (char *) BLE_ADDR_LOCATION);
+                adv_param.own_addr_type, (uint8_t *) BLE_ADDR_LOCATION);
 
         if (adv_param.channel_map & BLE_ADV_CHANNEL_1_MASK) {
             rf_ble_cmd_create_adv_cmd(cmd, BLE_ADV_CHANNEL_1, param, output);
@@ -681,7 +688,7 @@ static void state_advertising(process_event_t ev, process_data_t data,
 
             /* parse connection data*/
             parse_connect_request_data(&conn_param,
-                    (uint8_t *) &current_rx_entry[23]);
+                    (uint8_t *) &current_rx_entry[11]);
 
             /* convert the timing values into rf core ticks */
             conn_param.win_size = conn_param.win_size * 5000;
@@ -798,6 +805,7 @@ static void process_rx_entry_data_channel(void)
     uint8_t frame_type;
     uint8_t next_frame_type;
     uint8_t more_data;
+    linkaddr_t sender_addr;
 
     rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
     rfc_dataEntryGeneral_t *next_entry = (rfc_dataEntryGeneral_t *) entry->pNextEntry;
@@ -832,8 +840,11 @@ static void process_rx_entry_data_channel(void)
                 /* set the controller dependent attributes */
                 rssi = current_rx_entry[data_offset + data_len];
                 channel = (current_rx_entry[data_offset + data_len + 1] & 0x1F);
+                ble_addr_to_eui64(sender_addr.u8, conn_param.initiator_address);
                 packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
                 packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
+                packetbuf_set_addr(PACKETBUF_ADDR_RECEIVER, &linkaddr_node_addr);
+                packetbuf_set_addr(PACKETBUF_ADDR_SENDER, &sender_addr);
 
                 /* notify upper layers, if complete message was received */
                 if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {

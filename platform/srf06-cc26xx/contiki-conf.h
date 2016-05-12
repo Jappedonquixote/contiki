@@ -118,6 +118,8 @@
 #define SICSLOWPAN_CONF_COMPRESSION_THRESHOLD   0   /* always use compression */
 #define SICSLOWPAN_CONF_FRAG                    0
 #define SICSLOWPAN_CONF_MAXAGE                  8
+
+#define PACKETBUF_CONF_SIZE                   128
 /** @} */
 /*---------------------------------------------------------------------------*/
 /**
@@ -191,17 +193,14 @@
 
 /* The size of the uIP main buffer */
 #ifndef UIP_CONF_BUFFER_SIZE
-#define UIP_CONF_BUFFER_SIZE              1000
+#define UIP_CONF_BUFFER_SIZE              1280
 #endif
 
 /* ND and Routing */
-#ifndef UIP_CONF_ROUTER
-#define UIP_CONF_ROUTER                      1
-#endif
 
-#define UIP_CONF_ND6_SEND_RA                 0
+#define UIP_CONF_ROUTER                      0
+#define UIP_CONF_ND6_SEND_NA                 1
 #define UIP_CONF_IP_FORWARD                  0
-#define RPL_CONF_STATS                       0
 
 #ifndef RPL_CONF_OF
 #define RPL_CONF_OF rpl_mrhof
