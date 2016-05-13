@@ -179,23 +179,42 @@ static void init(void)
 }
 /*---------------------------------------------------------------------------*/
 static void prepare_l2cap_header(void) {
-    uint8_t data_len = packetbuf_datalen();
+
+    uint16_t sdu_len = packetbuf_datalen();
+    uint16_t mtu_len = sdu_len + 2;
+
     void *hdr_ptr;
 
     // packet length + channel + sdu length
     packetbuf_hdralloc(6);
     hdr_ptr = packetbuf_hdrptr();
 
-    memcpy(hdr_ptr, (data_len + 2), 2);
-    memcpy(&hdr_ptr[2], l2cap_router.cid, 2);
-    memcpy(&hdr_ptr[4], data_len, 2);
+    memset(hdr_ptr, 0x00, 6);
+
+    memcpy(hdr_ptr, &mtu_len, 2);
+    memcpy(&hdr_ptr[2], &l2cap_router.cid, 2);
+    memcpy(&hdr_ptr[4], &sdu_len, 2);
 }
 
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-    PRINTF("[ ble-mac ] send()\n");
-//    prepare_l2cap_header();
+//    uint8_t i;
+//    uint8_t *data = packetbuf_hdrptr();
+    PRINTF("[ ble-mac ] send() len: %d\n", packetbuf_datalen());
+//    for(i = 0; i < packetbuf_totlen(); i++) {
+//        PRINTF("%02X ", data[i]);
+//    }
+
+    prepare_l2cap_header();
+//
+//    data = packetbuf_hdrptr();
+//    PRINTF("\nafter L2CAP header generation: ");
+//    for(i = 0; i < packetbuf_totlen(); i++) {
+//        PRINTF("%02X ", data[i]);
+//    }
+//    PRINTF("\n");
+
     NETSTACK_RDC.send(sent_callback, ptr);
 }
 

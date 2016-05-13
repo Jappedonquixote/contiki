@@ -61,9 +61,6 @@ void ble_addr_to_eui64(uint8_t *dst, uint8_t *src)
     dst[3] = 0xFF;
     dst[4] = 0xFE;
     memcpy(&dst[5], &src[3], 3);
-
-    /* flip unique bit */
-    dst[1] |= 0x02;
 }
 
 /*---------------------------------------------------------------------------*/
