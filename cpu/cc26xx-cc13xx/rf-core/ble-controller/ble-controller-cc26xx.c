@@ -501,7 +501,7 @@ static ble_result_t send(void *buf, unsigned short buf_len)
     uint8_t frame_type;
 
     if((state != BLE_CONTROLLER_STATE_CONN_SLAVE) && (BLE_CONTROLLER_STATE_CONN_MASTER)) {
-        PRINTF("send() dropping data due to invalid state\n");
+        /* init not finished */
         return BLE_RESULT_ERROR;
     }
 
@@ -561,7 +561,10 @@ const struct ble_controller_driver ble_controller =
 static void parse_connect_request_data(ble_conn_param_t *p, uint8_t *entry)
 {
     int offset = 12;
-    memcpy(p->initiator_address, &entry[0], 6);
+    int i;
+    for(i = 0; i < BLE_ADDR_SIZE; i++) {
+        p->initiator_address[i] = entry[BLE_ADDR_SIZE - 1 -i];
+    }
     memcpy(&p->access_address, &entry[offset], 4);
     p->crc_init_0 = entry[offset + 4];
     p->crc_init_1 = entry[offset + 5];
@@ -842,7 +845,6 @@ static void process_rx_entry_data_channel(void)
                 channel = (current_rx_entry[data_offset + data_len + 1] & 0x1F);
                 ble_addr_to_eui64(sender_addr.u8, conn_param.initiator_address);
                 packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
-                packetbuf_set_attr(PACKETBUF_ATTR_CHANNEL, channel);
                 packetbuf_set_addr(PACKETBUF_ADDR_RECEIVER, &linkaddr_node_addr);
                 packetbuf_set_addr(PACKETBUF_ADDR_SENDER, &sender_addr);
 
