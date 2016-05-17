@@ -63,10 +63,12 @@
 
 #define BLE_MAC_L2CAP_CODE_CONN_REQ    0x14
 #define BLE_MAC_L2CAP_CODE_CONN_RSP    0x15
+#define BLE_MAC_L2CAP_CODE_CREDIT      0x16
 
 #define BLE_MAC_L2CAP_NODE_MTU         PACKETBUF_SIZE
 #define BLE_MAC_L2CAP_NODE_MPS         1280
 #define BLE_MAC_L2CAP_NODE_INIT_CREDITS  10
+#define BLE_MAC_L2CAP_CREDIT_THRESHOLD    2
 
 #define BLE_MAC_L2CAP_HEADER_SIZE         4
 /*---------------------------------------------------------------------------*/
@@ -199,22 +201,15 @@ static void prepare_l2cap_header(void) {
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-//    uint8_t i;
-//    uint8_t *data = packetbuf_hdrptr();
+
     PRINTF("[ ble-mac ] send() len: %d\n", packetbuf_datalen());
-//    for(i = 0; i < packetbuf_totlen(); i++) {
-//        PRINTF("%02X ", data[i]);
-//    }
-
     prepare_l2cap_header();
-//
-//    data = packetbuf_hdrptr();
-//    PRINTF("\nafter L2CAP header generation: ");
-//    for(i = 0; i < packetbuf_totlen(); i++) {
-//        PRINTF("%02X ", data[i]);
-//    }
-//    PRINTF("\n");
 
+    if(l2cap_router.credits <= 0) {
+        PRINTF("ble-mac send() no more credits left\n");
+    }
+
+    l2cap_router.credits--;
     NETSTACK_RDC.send(sent_callback, ptr);
 }
 
@@ -271,23 +266,53 @@ void process_l2cap_conn_req(uint8_t *data)
     memset(&resp_data[16], 0x00, 2);
 
     packetbuf_copyfrom((void *) resp_data, 18);
-    packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME_BLE_TYPE_DATA_LL_MSG);
-    NETSTACK_RDC.send(NULL, NULL);
+   NETSTACK_RDC.send(NULL, NULL);
 
 }
 
 /*---------------------------------------------------------------------------*/
-void process_l2cap_frame_signal_channel(uint8_t *data, uint8_t data_len)
+void process_l2cap_credit(uint8_t *data)
+{
+    uint8_t identifier;
+    uint16_t len;
+    uint16_t cid;
+    uint16_t credits;
+
+    identifier = data[0];
+    memcpy(&len, &data[1], 2);
+
+    if(len != 4)
+    {
+        PRINTF("process_l2cap_credit: invalid len: %d\n", len);
+        return;
+    }
+
+    /* parse L2CAP credit data */
+    memcpy(&cid, &data[3], 2);
+    memcpy(&credits, &data[5], 2);
+
+    l2cap_router.credits += credits;
+
+    PRINTF("process_l2cap_credit() new credits: %d\n", l2cap_router.credits);
+}
+
+/*---------------------------------------------------------------------------*/
+static void process_l2cap_frame_signal_channel(uint8_t *data, uint8_t data_len)
 {
     if (data[4] == BLE_MAC_L2CAP_CODE_CONN_REQ) {
         process_l2cap_conn_req(&data[5]);
+    } else if(data[4] == BLE_MAC_L2CAP_CODE_CREDIT) {
+        PRINTF("credit received\n");
+        process_l2cap_credit(&data[5]);
     } else {
         PRINTF("process_l2cap_msg: unknown signal channel code: %d\n", data[4]);
     }
 }
 
+
+
 /*---------------------------------------------------------------------------*/
-void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
+static void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
 {
     uint16_t len;
     uint16_t sdu_len;
@@ -311,6 +336,36 @@ void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
     }
 
 }
+/*---------------------------------------------------------------------------*/
+static void send_l2cap_credit()
+{
+    uint8_t len = 4;
+    uint8_t data[12];
+
+    /* create L2CAP credit */
+    /* length */
+    data[0] = len + 4;
+    data[1] = 0x00;
+
+    /* channel ID */
+    data[2] = 0x05;
+    data[3] = 0x00;
+
+    /* code */
+    data[4] = BLE_MAC_L2CAP_CODE_CREDIT;
+    /* identifier */
+    data[5] = 0xFF;
+    /* cmd length */
+    data[6] = len;
+    data[7] = 0x00;
+
+    memcpy(&data[8], &l2cap_node.cid, 2);
+    data[10] = BLE_MAC_L2CAP_NODE_INIT_CREDITS & 0xFF;
+    data[11] = BLE_MAC_L2CAP_NODE_INIT_CREDITS >> 8;
+
+    packetbuf_copyfrom((void *) data, len + 8);
+    NETSTACK_RDC.send(NULL, NULL);
+}
 
 /*---------------------------------------------------------------------------*/
 static void input(void)
@@ -327,6 +382,13 @@ static void input(void)
         }
         else if(channel_id == BLE_MAC_L2CAP_FLOW_CHANNEL) {
             process_l2cap_frame_flow_channel(data, len);
+            /* decrease the credits of the router */
+            l2cap_node.credits--;
+            if(l2cap_node.credits <= BLE_MAC_L2CAP_CREDIT_THRESHOLD) {
+                PRINTF("ble-mac input() sending credit\n");
+                send_l2cap_credit();
+                l2cap_node.credits += BLE_MAC_L2CAP_NODE_INIT_CREDITS;
+            }
         }
         else {
             PRINTF("ble-mac input: unknown L2CAP channel: %x\n", channel_id);
