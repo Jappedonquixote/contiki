@@ -44,7 +44,7 @@
 #include <string.h>
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -70,7 +70,7 @@
 #define BLE_MAC_L2CAP_NODE_INIT_CREDITS  10
 #define BLE_MAC_L2CAP_CREDIT_THRESHOLD    2
 
-#define BLE_MAC_L2CAP_HEADER_SIZE         4
+#define BLE_MAC_L2CAP_HEADER_SIZE         6
 /*---------------------------------------------------------------------------*/
 /* BLE controller */
 /* public device address of BLE controller */
@@ -188,10 +188,10 @@ static void prepare_l2cap_header(void) {
     void *hdr_ptr;
 
     // packet length + channel + sdu length
-    packetbuf_hdralloc(6);
+    packetbuf_hdralloc(BLE_MAC_L2CAP_HEADER_SIZE);
     hdr_ptr = packetbuf_hdrptr();
 
-    memset(hdr_ptr, 0x00, 6);
+    memset(hdr_ptr, 0x00, BLE_MAC_L2CAP_HEADER_SIZE);
 
     memcpy(hdr_ptr, &mtu_len, 2);
     memcpy(&hdr_ptr[2], &l2cap_router.cid, 2);
@@ -201,8 +201,6 @@ static void prepare_l2cap_header(void) {
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-
-    PRINTF("[ ble-mac ] send() len: %d\n", packetbuf_datalen());
     prepare_l2cap_header();
 
     if(l2cap_router.credits <= 0) {
@@ -331,7 +329,7 @@ static void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
         PRINTF("process_l2cap_frame_flow_channel: fragmented message\n");
     } else {
         /* remove the L2CAP header from the packetbuffer */
-        packetbuf_hdrreduce(6);
+        packetbuf_hdrreduce(BLE_MAC_L2CAP_HEADER_SIZE);
         NETSTACK_NETWORK.input();
     }
 

@@ -6,12 +6,15 @@
 #define BUTTON_SENSOR_CONF_ENABLE_SHUTDOWN    0
 /*---------------------------------------------------------------------------*/
 /* Change to match your configuration */
-#define IEEE802154_CONF_PANID            0xABCD
-#define RF_CORE_CONF_CHANNEL                 25
-#define RF_BLE_CONF_ENABLED                   1
 #define BOARD_CONF_DEBUGGER_DEVPACK			  1
+
+#define STARTUP_CONF_VERBOSE 1
+
+/*---------------------------------------------------------------------------*/
+/* network stack settings */
 #define NETSTACK_CONF_MAC				ble_mac_driver
-#define NETSTACK_CONF_RDC				ble_rdc_driver
+#define NETSTACK_CONF_RDC				nullrdc_driver
+#define NETSTACK_CONF_FRAMER            framer_ble
 /*---------------------------------------------------------------------------*/
 #endif /* PROJECT_CONF_H_ */
 /*---------------------------------------------------------------------------*/

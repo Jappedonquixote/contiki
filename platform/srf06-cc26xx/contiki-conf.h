@@ -111,7 +111,6 @@
 #define NULLRDC_CONF_ADDRESS_FILTER               0
 #endif
 
-#define NETSTACK_RADIO_MAX_PAYLOAD_LEN        125
 
 /* 6LoWPAN */
 #define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD       128

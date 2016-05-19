@@ -84,7 +84,7 @@
 /* The size of a single BLE data buffer*/
 #define BLE_CONTROLLER_DATA_BUF_SIZE          80
 /* The number of single BLE data buffers*/
-#define BLE_CONTROLLER_NUM_DATA_BUF            4
+#define BLE_CONTROLLER_NUM_DATA_BUF           16
 /*---------------------------------------------------------------------------*/
 typedef uint32_t rf_ticks_t;
 /*---------------------------------------------------------------------------*/
@@ -112,7 +112,7 @@ static rf_ticks_t adv_event_next;
 /*---------------------------------------------------------------------------*/
 /* CONNECTION                                                                */
 #define CONN_EVENT_NUM_DATA_CHANNELS       37
-#define CONN_EVENT_WINDOW_WIDENING       4000   /* 1 ms */
+#define CONN_EVENT_WINDOW_WIDENING      12000   /* 3 ms */
 #define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 40000   /* 10 ms*/
 
 typedef struct {
@@ -711,7 +711,6 @@ static void state_advertising(process_event_t ev, process_data_t data,
                 conn_event.counter++;
                 update_data_channel();
                 first_conn_event_anchor += conn_param.interval;
-                PRINTF("skipping first anchor point\n");
             }
             conn_event.start = first_conn_event_anchor;
 
@@ -804,7 +803,6 @@ static void process_rx_entry_data_channel(void)
     uint8_t data_offset = 9;                     // start index of BLE data
     uint8_t data_len;
     uint8_t rssi;
-    uint8_t channel;
     uint8_t frame_type;
     uint8_t next_frame_type;
     uint8_t more_data;
@@ -842,7 +840,6 @@ static void process_rx_entry_data_channel(void)
                 packetbuf_set_datalen(data_len);
                 /* set the controller dependent attributes */
                 rssi = current_rx_entry[data_offset + data_len];
-                channel = (current_rx_entry[data_offset + data_len + 1] & 0x1F);
                 ble_addr_to_eui64(sender_addr.u8, conn_param.initiator_address);
                 packetbuf_set_attr(PACKETBUF_ATTR_RSSI, rssi);
                 packetbuf_set_addr(PACKETBUF_ADDR_RECEIVER, &linkaddr_node_addr);
@@ -877,8 +874,8 @@ state_conn_slave(process_event_t ev, process_data_t data,
     if(ev == rf_core_timer_event) {
         /* check if the last connection event was executed properly */
         if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
-//            PRINTF("command status: 0x%04X; connection event counter: %d\n",
-//                    CMD_GET_STATUS(cmd), conn_event.counter);
+            PRINTF("command status: 0x%04X; connection event counter: %d; channel: %d\n",
+                    CMD_GET_STATUS(cmd), conn_event.counter, conn_event.mapped_channel);
         }
 
         /* calculate parameters for upcoming connection event */
