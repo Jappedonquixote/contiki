@@ -112,8 +112,8 @@ static rf_ticks_t adv_event_next;
 /*---------------------------------------------------------------------------*/
 /* CONNECTION                                                                */
 #define CONN_EVENT_NUM_DATA_CHANNELS       37
-#define CONN_EVENT_WINDOW_WIDENING      12000   /* 3 ms */
-#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 40000   /* 10 ms*/
+#define CONN_EVENT_WINDOW_WIDENING       4000   /* 1 ms */
+#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 80000   /* 20 ms*/
 
 typedef struct {
     uint8_t initiator_address[6];
@@ -874,8 +874,15 @@ state_conn_slave(process_event_t ev, process_data_t data,
     if(ev == rf_core_timer_event) {
         /* check if the last connection event was executed properly */
         if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
-            PRINTF("command status: 0x%04X; connection event counter: %d; channel: %d\n",
-                    CMD_GET_STATUS(cmd), conn_event.counter, conn_event.mapped_channel);
+            if(CMD_GET_STATUS(cmd) == RF_CORE_RADIO_OP_STATUS_ERROR_PAST_START) {
+                PRINTF("past_start: connection event counter: %d\n", conn_event.counter);
+                PRINTF("current_time: %lu\n", rf_core_read_current_rf_ticks());
+                PRINTF("start_time:   %lu\n", (conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR));
+            }
+            else {
+                PRINTF("command status: 0x%04X; connection event counter: %d\n",
+                                        CMD_GET_STATUS(cmd), conn_event.counter);
+            }
         }
 
         /* calculate parameters for upcoming connection event */
@@ -906,14 +913,12 @@ state_conn_slave(process_event_t ev, process_data_t data,
 
         if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK) {
             PRINTF("connection error; event counter: %u\n", conn_event.counter);
-            return;
         }
 
         /* calculate next anchor point & setup timer interrupt */
         conn_event.next_start = conn_event.start + conn_param.interval;
         if(rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR) != RF_CORE_CMD_OK ) {
             PRINTF("timer error; event counter: %u\n", conn_event.counter);
-            return;
         }
     } else if(ev == rf_core_data_rx_event) {
         process_rx_entry_data_channel();
@@ -921,6 +926,7 @@ state_conn_slave(process_event_t ev, process_data_t data,
         free_finished_tx_bufs();
     }
 }
+
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_controller_process, ev, data)
 {
