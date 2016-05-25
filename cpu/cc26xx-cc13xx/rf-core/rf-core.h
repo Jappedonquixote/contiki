@@ -245,6 +245,8 @@ extern process_event_t rf_core_data_rx_event;
 /* Event triggered, when a finished tx entry is available                    */
 extern process_event_t rf_core_data_tx_event;
 /* Event triggered, when rf_core timer interrupt was received                */
+extern process_event_t rf_core_command_done_event;
+/* Event triggered, when rf_core timer interrupt was received                */
 extern process_event_t rf_core_timer_event;
 /*---------------------------------------------------------------------------*/
 /**

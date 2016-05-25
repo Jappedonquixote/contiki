@@ -113,7 +113,6 @@ static rf_ticks_t adv_event_next;
 /* CONNECTION                                                                */
 #define CONN_EVENT_NUM_DATA_CHANNELS       37
 #define CONN_EVENT_WINDOW_WIDENING       4000   /* 1 ms */
-#define CONN_EVENT_WAKEUP_BEFORE_ANCHOR 80000   /* 20 ms*/
 
 typedef struct {
     uint8_t initiator_address[6];
@@ -730,7 +729,6 @@ static void state_advertising(process_event_t ev, process_data_t data,
 
             /* setup timer interrupt for first connection event */
             conn_event.next_start = first_conn_event_anchor + conn_param.interval;
-            rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR);
 
             state = BLE_CONTROLLER_STATE_CONN_SLAVE;
             /* clear the output buffer, so that the counters are actually correct*/
@@ -871,14 +869,14 @@ state_conn_slave(process_event_t ev, process_data_t data,
                               uint8_t *cmd, uint8_t *param, uint8_t *output)
 {
     rfc_bleMasterSlaveOutput_t *o = (rfc_bleMasterSlaveOutput_t *) output;
-    if(ev == rf_core_timer_event) {
+
+    if(ev == rf_core_command_done_event) {
         /* check if the last connection event was executed properly */
         if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
             if(CMD_GET_STATUS(cmd) == RF_CORE_RADIO_OP_STATUS_ERROR_PAST_START) {
                 PRINTF("past_start: connection event counter: %d\n", conn_event.counter);
                 PRINTF("current_time: %lu\n", rf_core_read_current_rf_ticks());
-                PRINTF("start_time:   %lu\n", (conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR));
-            }
+           }
             else {
                 PRINTF("command status: 0x%04X; connection event counter: %d\n",
                                         CMD_GET_STATUS(cmd), conn_event.counter);
@@ -915,11 +913,8 @@ state_conn_slave(process_event_t ev, process_data_t data,
             PRINTF("connection error; event counter: %u\n", conn_event.counter);
         }
 
-        /* calculate next anchor point & setup timer interrupt */
+        /* calculate next anchor point*/
         conn_event.next_start = conn_event.start + conn_param.interval;
-        if(rf_core_start_timer_comp(conn_event.next_start - CONN_EVENT_WAKEUP_BEFORE_ANCHOR) != RF_CORE_CMD_OK ) {
-            PRINTF("timer error; event counter: %u\n", conn_event.counter);
-        }
     } else if(ev == rf_core_data_rx_event) {
         process_rx_entry_data_channel();
     } else if(ev == rf_core_data_tx_event) {

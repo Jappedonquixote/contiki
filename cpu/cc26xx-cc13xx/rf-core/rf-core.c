@@ -83,14 +83,15 @@
 /* RF interrupts */
 #define RX_FRAME_IRQ IRQ_RX_ENTRY_DONE
 #define TX_FRAME_IRQ IRQ_TX_ENTRY_DONE
+#define COMMAND_IRQ  IRQ_COMMAND_DONE
 #define ERROR_IRQ    IRQ_INTERNAL_ERROR
 #define RX_NOK_IRQ   IRQ_RX_NOK
 
 /* Those IRQs are enabled all the time */
 #if RF_CORE_DEBUG_CRC
-#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | RX_NOK_IRQ | TX_FRAME_IRQ)
+#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | RX_NOK_IRQ | TX_FRAME_IRQ | COMMAND_IRQ)
 #else
-#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | TX_FRAME_IRQ)
+#define ENABLED_IRQS (RX_FRAME_IRQ | ERROR_IRQ | TX_FRAME_IRQ | IRQ_COMMAND_DONE)
 #endif
 
 #define cc26xx_rf_cpe0_isr RFCCPE0IntHandler
@@ -109,6 +110,7 @@ PROCESS(rf_core_process, "CC13xx / CC26xx RF driver");
 /*---------------------------------------------------------------------------*/
 process_event_t rf_core_data_rx_event;
 process_event_t rf_core_data_tx_event;
+process_event_t rf_core_command_done_event;
 process_event_t rf_core_timer_event;
 /*---------------------------------------------------------------------------*/
 #define RF_CORE_CLOCKS_MASK (RFC_PWR_PWMCLKEN_RFC_M | RFC_PWR_PWMCLKEN_CPE_M \
@@ -447,6 +449,7 @@ rf_core_setup_interrupts()
   }
   rf_core_data_rx_event = process_alloc_event();
   rf_core_data_tx_event = process_alloc_event();
+  rf_core_command_done_event = process_alloc_event();
   rf_core_timer_event  = process_alloc_event();
 }
 /*---------------------------------------------------------------------------*/
@@ -576,6 +579,11 @@ cc26xx_rf_cpe0_isr(void)
       /* Clear the RX_ENTRY_DONE interrupt flag */
       HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFFFFFBFF;
       process_post(PROCESS_BROADCAST, rf_core_data_tx_event, NULL);
+  }
+
+  if(HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) & COMMAND_IRQ) {
+      HWREG(RFC_DBELL_NONBUF_BASE + RFC_DBELL_O_RFCPEIFG) = 0xFFFFFFFE;
+      process_post(PROCESS_BROADCAST, rf_core_command_done_event, NULL);
   }
 
   if(RF_CORE_DEBUG_CRC) {
