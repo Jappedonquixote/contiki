@@ -498,6 +498,7 @@ static ble_result_t send(void *buf, unsigned short buf_len)
     tx_buf_t *tx_buf;
     uint8_t i;
     uint8_t frame_type;
+    uint8_t *data = (uint8_t *)buf;
 
     if((state != BLE_CONTROLLER_STATE_CONN_SLAVE) && (BLE_CONTROLLER_STATE_CONN_MASTER)) {
         /* init not finished */
@@ -517,7 +518,7 @@ static ble_result_t send(void *buf, unsigned short buf_len)
             frame_type = FRAME_BLE_DATA_PDU_LLID_DATA_FRAGMENT;
         }
 
-        prepare_tx_buf_payload(tx_buf, &buf[i], (buf_len - i), frame_type);
+        prepare_tx_buf_payload(tx_buf, &data[i], (buf_len - i), frame_type);
 
         if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
             PRINTF("send() could not add buffer to tx data queue\n");
@@ -873,14 +874,8 @@ state_conn_slave(process_event_t ev, process_data_t data,
     if(ev == rf_core_command_done_event) {
         /* check if the last connection event was executed properly */
         if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
-            if(CMD_GET_STATUS(cmd) == RF_CORE_RADIO_OP_STATUS_ERROR_PAST_START) {
-                PRINTF("past_start: connection event counter: %d\n", conn_event.counter);
-                PRINTF("current_time: %lu\n", rf_core_read_current_rf_ticks());
-           }
-            else {
                 PRINTF("command status: 0x%04X; connection event counter: %d\n",
                                         CMD_GET_STATUS(cmd), conn_event.counter);
-            }
         }
 
         /* calculate parameters for upcoming connection event */

@@ -345,7 +345,7 @@ void rf_ble_cmd_create_slave_cmd(uint8_t *cmd, uint8_t channel, uint8_t *params,
     c->channel = channel;
     c->pParams = (rfc_bleSlavePar_t *) params;
     c->startTrigger.triggerType = TRIG_ABSTIME;
-    c->startTrigger.pastTrig = 0;
+    c->startTrigger.pastTrig = 1;
     c->startTime = start_time;
     c->pOutput = (rfc_bleMasterSlaveOutput_t *) output;
 }

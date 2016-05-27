@@ -116,7 +116,7 @@
 #define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD       128
 #define SICSLOWPAN_CONF_COMPRESSION          SICSLOWPAN_COMPRESSION_HC06
 #define SICSLOWPAN_CONF_COMPRESSION_THRESHOLD   0   /* always use compression */
-#define SICSLOWPAN_CONF_FRAG                    0
+#define SICSLOWPAN_CONF_FRAG                    1
 
 #define SICSLOWPAN_FRAMER_HDRLEN                0
 
