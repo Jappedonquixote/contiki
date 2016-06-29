@@ -92,10 +92,24 @@ timeout_handler(void)
     uint16_t len;
     seq_num++;
 
-    len = (seq_num * 50) + 200;
-    len = len % 800;
+//    if(seq_num % 20 == 5){
+//        len = 100;
 
-    memset(buf, (0x29 + seq_num), len);
+    if(seq_num % 20 == 1) {
+        len = 10;
+    } else if(seq_num % 20 == 2){
+        len = 100;
+    } else if(seq_num % 20 == 4){
+        len = 200;
+    } else if(seq_num % 20 == 8){
+        len = 400;
+    } else if(seq_num % 20 == 16){
+        len = 1200;
+    } else {
+        return;
+    }
+
+    memset(buf, 'x', len);
     memset(&buf[len], '\0', 1);
 
     printf("sending %d bytes of UDP payload\n", strlen(buf));

@@ -81,11 +81,6 @@
  */
 #define BLE_ADDR_LOCATION   0x500012E8
 /*---------------------------------------------------------------------------*/
-/* The size of a single BLE data buffer*/
-#define BLE_CONTROLLER_DATA_BUF_SIZE          80
-/* The number of single BLE data buffers*/
-#define BLE_CONTROLLER_NUM_DATA_BUF           40
-/*---------------------------------------------------------------------------*/
 typedef uint32_t rf_ticks_t;
 /*---------------------------------------------------------------------------*/
 /* ADVERTISING                                                               */
@@ -169,9 +164,10 @@ static ble_conn_event_t conn_event;
 static rf_ticks_t first_conn_event_anchor;
 /*---------------------------------------------------------------------------*/
 /* RX data queue (all received packets are stored in the same queue)         */
+#define BLE_RX_BUF_DATA_LEN 60
 #define BLE_RX_BUF_OVERHEAD 8
-#define BLE_RX_BUF_LEN      (BLE_CONTROLLER_DATA_BUF_SIZE + BLE_RX_BUF_OVERHEAD)
-#define BLE_RX_NUM_BUF      BLE_CONTROLLER_NUM_DATA_BUF
+#define BLE_RX_BUF_LEN      (BLE_RX_BUF_DATA_LEN + BLE_RX_BUF_OVERHEAD)
+#define BLE_RX_NUM_BUF      10
 
 static uint8_t rx_bufs[BLE_RX_NUM_BUF][BLE_RX_BUF_LEN] CC_ALIGN(4);
 
@@ -182,7 +178,7 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_DATA_LEN 27
 #define BLE_TX_BUF_OVERHEAD  9
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
-#define BLE_TX_NUM_BUF      BLE_CONTROLLER_NUM_DATA_BUF
+#define BLE_TX_NUM_BUF      10
 
 typedef struct {
     uint8_t data[BLE_TX_BUF_LEN] CC_ALIGN(4);
@@ -340,9 +336,7 @@ static ble_result_t read_bd_addr(uint8_t *addr)
 static ble_result_t read_buffer_size(unsigned int *buf_len,
         unsigned int *num_buf)
 {
-    *buf_len = BLE_CONTROLLER_DATA_BUF_SIZE;
-    *num_buf = BLE_CONTROLLER_NUM_DATA_BUF;
-    return BLE_RESULT_OK;
+    return BLE_RESULT_NOT_SUPPORTED;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -529,8 +523,6 @@ static ble_result_t send(void *buf, unsigned short buf_len)
             return BLE_RESULT_ERROR;
         }
     }
-
-
     return BLE_RESULT_OK;
 }
 /*---------------------------------------------------------------------------*/
@@ -607,6 +599,8 @@ static void free_finished_tx_bufs(void)
     tx_buf_t *buf = list_head(tx_buffers_queued);
     rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) buf;
 
+    uint8_t size = list_length(tx_buffers_queued);
+
     while((buf != NULL) && (e->status == DATA_ENTRY_FINISHED)) {
         /* free memory block */
         memb_free(&tx_buffers, buf);
@@ -616,6 +610,11 @@ static void free_finished_tx_bufs(void)
 
         buf = list_head(tx_buffers_queued);
         e = (rfc_dataEntryGeneral_t *) buf;
+    }
+
+    if(size > 0) {
+    PRINTF("free_finished_tx_bufs() freed: %d buffers, %d remaining\n",
+            (size - list_length(tx_buffers_queued)), list_length(tx_buffers_queued));
     }
 }
 /*---------------------------------------------------------------------------*/
@@ -851,6 +850,7 @@ static void process_rx_entry_data_channel(void)
 
                 /* notify upper layers, if complete message was received */
                 if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
+                    PRINTF("ble-controller-input() complete message: %d bytes\n", packetbuf_datalen());
                     NETSTACK_RDC.input();
                 }
             }
@@ -861,6 +861,7 @@ static void process_rx_entry_data_channel(void)
 
                 /* notify upper layers, if complete message was received */
                 if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
+                    PRINTF("ble-controller-input() assemble message: %d bytes\n", packetbuf_datalen());
                     NETSTACK_RDC.input();
                 }
             }
@@ -877,6 +878,9 @@ state_conn_slave(process_event_t ev, process_data_t data,
     rfc_bleMasterSlaveOutput_t *o = (rfc_bleMasterSlaveOutput_t *) output;
 
     if(ev == rf_core_command_done_event) {
+
+        free_finished_tx_bufs();
+
         /* check if connection needs to be terminated */
         if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
            (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
@@ -929,7 +933,8 @@ state_conn_slave(process_event_t ev, process_data_t data,
     } else if(ev == rf_core_data_rx_event) {
         process_rx_entry_data_channel();
     } else if(ev == rf_core_data_tx_event) {
-        free_finished_tx_bufs();
+        // TODO handle the finished tx buffers each connection event?!?
+//        free_finished_tx_bufs();
     }
 }
 

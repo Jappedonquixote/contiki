@@ -65,7 +65,7 @@
 #define BLE_SLAVE_CONN_INTERVAL_MAX  0x01F0
 
 #define BLE_MAC_L2CAP_SIGNAL_CHANNEL 0x0005
-#define BLE_MAC_L2CAP_FLOW_CHANNEL   0xCAFE
+#define BLE_MAC_L2CAP_FLOW_CHANNEL   0x0041
 
 #define BLE_MAC_L2CAP_CODE_CONN_REQ    0x14
 #define BLE_MAC_L2CAP_CODE_CONN_RSP    0x15
@@ -530,7 +530,6 @@ PROCESS_THREAD(ble_mac_process, ev, data)
         PROCESS_YIELD();
 
         if(ev == PROCESS_EVENT_POLL) {
-            PRINTF("ble-mac process polled\n");
             /* handling a single or the first of several L2CAP packets */
             buf = list_head(l2cap_buf_used);
             if(buf != NULL) {
@@ -553,12 +552,11 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 /* check if next L2CAP fragments need to be sent */
                 if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 8));
+                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 4));
                 }
             }
         }
         else if((ev == PROCESS_EVENT_TIMER) && (data == &l2cap_timer)) {
-            PRINTF("ble-mac process timer\n");
             /* handle the following L2CAP fragments */
 
             buf = list_head(l2cap_buf_used);
@@ -577,7 +575,7 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 /* check if next L2CAP fragments need to be sent */
                 if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 8));
+                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 4));
                 }
             }
         }
