@@ -121,6 +121,8 @@
 #define SICSLOWPAN_FRAMER_HDRLEN                0
 
 #define PACKETBUF_CONF_SIZE                   128
+/* TODO: this needs to be 10, but the memory is constrained */
+#define QUEUEBUF_CONF_NUM                       8
 /** @} */
 /*---------------------------------------------------------------------------*/
 /**

@@ -51,7 +51,7 @@
 #define SERVER_IP   "aaaa::1"
 
 #define ECHO_TIMEOUT (CLOCK_SECOND * 5)
-#define SEND_INTERVAL       (CLOCK_SECOND * 2)
+#define SEND_INTERVAL       (CLOCK_SECOND * 1)
 #define MAX_PAYLOAD_LEN     1280
 
 static struct etimer timer;
@@ -80,7 +80,7 @@ tcpip_handler(void)
   if(uip_newdata()) {
     str = uip_appdata;
     /* only show the start of the packet */
-    str[uip_datalen()] = '\0';
+    str[MIN(uip_datalen(), 40)] = '\0';
     printf("udp data received: %s\n", str);
   }
 }
@@ -89,11 +89,16 @@ static char buf[MAX_PAYLOAD_LEN];
 static void
 timeout_handler(void)
 {
+    uint16_t len;
     seq_num++;
-    memset(buf, (0x29 + seq_num), (80 * seq_num));
-    memset(&buf[(80 * seq_num)], '\0', 1);
 
-    printf("sending: %s\n", buf);
+    len = (seq_num * 50) + 200;
+    len = len % 800;
+
+    memset(buf, (0x29 + seq_num), len);
+    memset(&buf[len], '\0', 1);
+
+    printf("sending %d bytes of UDP payload\n", strlen(buf));
     uip_udp_packet_send(conn, buf, strlen(buf));
 }
 /*---------------------------------------------------------------------------*/

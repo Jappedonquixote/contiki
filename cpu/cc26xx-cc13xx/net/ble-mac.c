@@ -211,7 +211,6 @@ static void init(void)
 
     PRINTF("ble-mac init() BLE-addr: ");
     PRINTADDR(ble_addr);
-    PRINTF("; buffer-len: %d; num-buffer: %d\n", buffer_len, num_buffer);
 
 
     /* set the advertisement parameter */
@@ -240,6 +239,9 @@ static void send(mac_callback_t sent_callback, void *ptr)
     uint8_t data_len = packetbuf_datalen();
     uint8_t *data = packetbuf_dataptr();
     uint8_t dispatch = (data[0] >> 3) & 0x1F;
+
+    uint16_t uip_len;
+    uint16_t offset;
 
     if(dispatch == SICSLOWPAN_FIRST_FRAGM_DISPATCH) {
         if(list_length(l2cap_buf_used) > 0) {
@@ -270,7 +272,12 @@ static void send(mac_callback_t sent_callback, void *ptr)
         memcpy(buf->data, packetbuf_dataptr() + SICSLOWPAN_SUBSEQ_FRAGM_SIZE, buf->data_len);
         buf->sent_callback = sent_callback;
         buf->ptr = ptr;
-        process_poll(&ble_mac_process);
+
+        uip_len = ((data[0] & 0x1F) << 8) + data[1];
+        offset = data[4] * 8;
+        if(uip_len == (offset + buf->data_len)) {
+            process_poll(&ble_mac_process);
+        }
     }
     else {
         if(list_length(l2cap_buf_used) > 0) {
@@ -451,6 +458,8 @@ static void input(void)
 
     memcpy(&channel_id, &data[2], 2);
 
+    PRINTF("ble-mac input: %d bytes\n", len);
+
     if(len > 0) {
         if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL) {
             process_l2cap_frame_signal_channel(data, len);
@@ -521,6 +530,7 @@ PROCESS_THREAD(ble_mac_process, ev, data)
         PROCESS_YIELD();
 
         if(ev == PROCESS_EVENT_POLL) {
+            PRINTF("ble-mac process polled\n");
             /* handling a single or the first of several L2CAP packets */
             buf = list_head(l2cap_buf_used);
             if(buf != NULL) {
@@ -543,11 +553,12 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 /* check if next L2CAP fragments need to be sent */
                 if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 16));
+                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 8));
                 }
             }
         }
         else if((ev == PROCESS_EVENT_TIMER) && (data == &l2cap_timer)) {
+            PRINTF("ble-mac process timer\n");
             /* handle the following L2CAP fragments */
 
             buf = list_head(l2cap_buf_used);
@@ -566,7 +577,7 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 /* check if next L2CAP fragments need to be sent */
                 if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 16));
+                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 8));
                 }
             }
         }

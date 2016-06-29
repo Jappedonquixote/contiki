@@ -84,7 +84,7 @@
 /* The size of a single BLE data buffer*/
 #define BLE_CONTROLLER_DATA_BUF_SIZE          80
 /* The number of single BLE data buffers*/
-#define BLE_CONTROLLER_NUM_DATA_BUF           16
+#define BLE_CONTROLLER_NUM_DATA_BUF           40
 /*---------------------------------------------------------------------------*/
 typedef uint32_t rf_ticks_t;
 /*---------------------------------------------------------------------------*/
@@ -148,6 +148,9 @@ typedef struct {
     /* connection event counter */
     uint16_t counter;
 
+    /* result code of the last connection event */
+    uint16_t last_status;
+
     /* unmapped data mapped_channel */
     uint8_t unmapped_channel;
 
@@ -176,8 +179,9 @@ static dataQueue_t rx_data_queue = { 0 };
 static uint8_t *current_rx_entry;
 /*---------------------------------------------------------------------------*/
 /* TX data queue (data channel packets are stored in the same queue)         */
-#define BLE_TX_BUF_OVERHEAD 8
-#define BLE_TX_BUF_LEN      (BLE_CONTROLLER_DATA_BUF_SIZE + BLE_TX_BUF_OVERHEAD)
+#define BLE_TX_BUF_DATA_LEN 27
+#define BLE_TX_BUF_OVERHEAD  9
+#define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
 #define BLE_TX_NUM_BUF      BLE_CONTROLLER_NUM_DATA_BUF
 
 typedef struct {
@@ -722,9 +726,10 @@ static void state_advertising(process_event_t ev, process_data_t data,
             rf_ble_cmd_create_slave_cmd(cmd, conn_event.mapped_channel, param,
                     output, (conn_event.start - conn_param.window_widening));
 
-            if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK)
-            {
+            if (rf_ble_cmd_send(cmd) != RF_BLE_CMD_OK) {
                 PRINTF("could not establish connection\n");
+                state = BLE_CONTROLLER_STATE_STANDBY;
+                set_adv_enable(1);
                 return;
             }
 
@@ -872,8 +877,19 @@ state_conn_slave(process_event_t ev, process_data_t data,
     rfc_bleMasterSlaveOutput_t *o = (rfc_bleMasterSlaveOutput_t *) output;
 
     if(ev == rf_core_command_done_event) {
+        /* check if connection needs to be terminated */
+        if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+           (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+           (conn_event.counter > 50)) {
+            PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n");
+            state = BLE_CONTROLLER_STATE_STANDBY;
+            set_adv_enable(1);
+            return;
+        }
+
+        conn_event.last_status = CMD_GET_STATUS(cmd);
         /* check if the last connection event was executed properly */
-        if(CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
+        if(conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
                 PRINTF("command status: 0x%04X; connection event counter: %d\n",
                                         CMD_GET_STATUS(cmd), conn_event.counter);
         }
