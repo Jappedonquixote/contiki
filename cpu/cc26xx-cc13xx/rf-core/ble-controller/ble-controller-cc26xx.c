@@ -599,7 +599,7 @@ static void free_finished_tx_bufs(void)
     tx_buf_t *buf = list_head(tx_buffers_queued);
     rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) buf;
 
-    uint8_t size = list_length(tx_buffers_queued);
+//    uint8_t size = list_length(tx_buffers_queued);
 
     while((buf != NULL) && (e->status == DATA_ENTRY_FINISHED)) {
         /* free memory block */
@@ -612,10 +612,10 @@ static void free_finished_tx_bufs(void)
         e = (rfc_dataEntryGeneral_t *) buf;
     }
 
-    if(size > 0) {
-    PRINTF("free_finished_tx_bufs() freed: %d buffers, %d remaining\n",
-            (size - list_length(tx_buffers_queued)), list_length(tx_buffers_queued));
-    }
+//    if(size > 0) {
+//    PRINTF("free_finished_tx_bufs() freed: %d buffers, %d remaining - memb free: %d\n",
+//            (size - list_length(tx_buffers_queued)), list_length(tx_buffers_queued), memb_numfree(&tx_buffers));
+//    }
 }
 /*---------------------------------------------------------------------------*/
 static void

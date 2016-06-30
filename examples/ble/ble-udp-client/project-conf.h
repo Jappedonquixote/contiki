@@ -13,7 +13,8 @@
 /*---------------------------------------------------------------------------*/
 /* network stack settings */
 #define NETSTACK_CONF_MAC				ble_mac_driver
-#define NETSTACK_CONF_RDC				nullrdc_driver
+//#define NETSTACK_CONF_RDC				nullrdc_driver
+#define NETSTACK_CONF_RDC				nullrdc_noframer_driver
 #define NETSTACK_CONF_FRAMER            framer_ble
 /*---------------------------------------------------------------------------*/
 #endif /* PROJECT_CONF_H_ */
