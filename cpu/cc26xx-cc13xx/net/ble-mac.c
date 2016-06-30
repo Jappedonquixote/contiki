@@ -575,7 +575,7 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 /* check if next L2CAP fragments need to be sent */
                 if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 4));
+                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 8));
                 }
             }
         }

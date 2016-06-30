@@ -96,15 +96,15 @@ timeout_handler(void)
 //        len = 100;
 
     if(seq_num % 20 == 1) {
-        len = 10;
+        len = 77;
     } else if(seq_num % 20 == 2){
-        len = 100;
+        len = 154;
     } else if(seq_num % 20 == 4){
-        len = 200;
+        len = 308;
     } else if(seq_num % 20 == 8){
-        len = 400;
+        len = 616;
     } else if(seq_num % 20 == 16){
-        len = 1200;
+        len = 1232;
     } else {
         return;
     }
