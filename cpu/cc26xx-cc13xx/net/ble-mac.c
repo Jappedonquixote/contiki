@@ -71,8 +71,8 @@
 #define BLE_MAC_L2CAP_CODE_CONN_RSP    0x15
 #define BLE_MAC_L2CAP_CODE_CREDIT      0x16
 
-#define BLE_MAC_L2CAP_NODE_MTU         PACKETBUF_SIZE
-#define BLE_MAC_L2CAP_NODE_MPS         1280
+#define BLE_MAC_L2CAP_NODE_MTU         1280
+#define BLE_MAC_L2CAP_NODE_MPS         PACKETBUF_SIZE
 #define BLE_MAC_L2CAP_NODE_INIT_CREDITS  10
 #define BLE_MAC_L2CAP_CREDIT_THRESHOLD    2
 
@@ -94,8 +94,8 @@ static int buffer_len;
 static int num_buffer;
 /*---------------------------------------------------------------------------*/
 /* L2CAP fragmentation buffers and utilities                                 */
-#define L2CAP_FRAG_LEN        BLE_MAC_L2CAP_NODE_MTU
-#define L2CAP_MESG_LEN        BLE_MAC_L2CAP_NODE_MPS
+#define L2CAP_FRAG_LEN        BLE_MAC_L2CAP_NODE_MPS
+#define L2CAP_MESG_LEN        BLE_MAC_L2CAP_NODE_MTU
 #define L2CAP_NUM_FRAG        ((uint8_t)(L2CAP_MESG_LEN / L2CAP_FRAG_LEN + 1))
 
 typedef struct {
@@ -126,6 +126,10 @@ static void free_l2capbuf(l2cap_buf_t *buf) {
     memb_free(&l2cap_buffers, buf);
     list_remove(l2cap_buf_used, buf);
 }
+/*---------------------------------------------------------------------------*/
+static uint16_t rx_sdu_len;
+static uint16_t rx_len;
+
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_mac_process, "BLE MAC process");
 /*---------------------------------------------------------------------------*/
@@ -399,6 +403,10 @@ static void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
     uint16_t len;
     uint16_t sdu_len;
 
+    uint16_t datagram_size;
+    uint16_t datagram_tag;
+    uint8_t datagram_offset;
+
     if(data_len < 4) {
         PRINTF("process_l2cap_frame: illegal L2CAP frame data_len: %d\n", data_len);
         /* a L2CAP frame has a minimum length of 4 */
@@ -408,15 +416,55 @@ static void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
     memcpy(&len, &data[0], 2);
     memcpy(&sdu_len, &data[4], 2);
 
-    if(sdu_len > (len - 2)) {
+
+    if(rx_sdu_len != 0) {
+        datagram_size = 0xE000;
+        datagram_size += len / 8;
+        datagram_tag = 0x0000;
+        datagram_offset = rx_len / 8;
+
+        rx_len += len;
+        if(rx_sdu_len == rx_len) {
+            /* clear counter */
+            rx_sdu_len = 0;
+            rx_len = 0;
+        }
+        PRINTF("process_l2cap_frame_flow_channel() datagram_size: %X, datagram_tag: %X, datagram_offset: %X\n", datagram_size, datagram_tag, datagram_offset);
+
+        memset(packetbuf_dataptr(), datagram_size >> 8, 1);
+        memset(packetbuf_dataptr() + 1, datagram_size & 0xFF, 1);
+        memcpy(packetbuf_hdrptr() + 2, &datagram_tag, 2);
+        memcpy(packetbuf_hdrptr() + 4, &datagram_offset, 1);
+
+        NETSTACK_LLSEC.input();
+    }
+    else if(sdu_len > (len - 2)) {
         /* the L2CAP message is fragmented */
-        PRINTF("process_l2cap_frame_flow_channel: fragmented message; len: %u; sdu_len: %u\n", len, sdu_len);
+        datagram_size = 0xC000;
+        datagram_size += (len - 2) / 8;
+        datagram_tag = 0x0000;
+
+        PRINTF("process_l2cap_frame_flow_channel() datagram_size: %X, datagram_tag: %X\n",
+                datagram_size, datagram_tag);
+
+        memmove(packetbuf_dataptr(), packetbuf_dataptr() + 2, len - 2);
+        memset(packetbuf_dataptr(), datagram_size >> 8, 1);
+        memset(packetbuf_dataptr() + 1, datagram_size & 0xFF, 1);
+
+        memcpy(packetbuf_dataptr() + 2, &datagram_tag, 2);
+
+        /* initialize the counter for the first packet */
+        rx_sdu_len = sdu_len;
+        rx_len = len - 2;
+
+        NETSTACK_LLSEC.input();
+
     } else {
+        PRINTF("process_l2cap_frame_flow_channel() complete message\n");
         /* remove the L2CAP header from the packetbuffer */
         packetbuf_hdrreduce(BLE_MAC_L2CAP_FIRST_HEADER_SIZE);
         NETSTACK_LLSEC.input();
     }
-
 }
 /*---------------------------------------------------------------------------*/
 static void send_l2cap_credit()

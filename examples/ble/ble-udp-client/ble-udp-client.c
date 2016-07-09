@@ -99,12 +99,12 @@ timeout_handler(void)
         len = 77;
     } else if(seq_num % 20 == 2){
         len = 154;
-    } else if(seq_num % 20 == 4){
-        len = 308;
-    } else if(seq_num % 20 == 8){
-        len = 616;
-    } else if(seq_num % 20 == 16){
-        len = 1232;
+//    } else if(seq_num % 20 == 4){
+//        len = 308;
+//    } else if(seq_num % 20 == 8){
+//        len = 616;
+//    } else if(seq_num % 20 == 16){
+//        len = 1232;
     } else {
         return;
     }

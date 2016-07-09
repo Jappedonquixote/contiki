@@ -178,7 +178,7 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_DATA_LEN 27
 #define BLE_TX_BUF_OVERHEAD  9
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
-#define BLE_TX_NUM_BUF      10
+#define BLE_TX_NUM_BUF      20
 
 typedef struct {
     uint8_t data[BLE_TX_BUF_LEN] CC_ALIGN(4);
@@ -807,7 +807,6 @@ static void process_rx_entry_data_channel(void)
     uint8_t data_len;
     uint8_t rssi;
     uint8_t frame_type;
-    uint8_t next_frame_type;
     uint8_t more_data;
     linkaddr_t sender_addr;
 
@@ -824,11 +823,6 @@ static void process_rx_entry_data_channel(void)
         if (data_len > 0) {
             frame_type = (current_rx_entry[data_offset] & 0x03);
             more_data = (current_rx_entry[data_offset] & 0x10) >> 4;
-            if(more_data && next_entry->status == DATA_ENTRY_FINISHED) {
-                next_frame_type = (entry->pNextEntry[data_offset] & 0x03);
-            } else {
-                next_frame_type = 0;
-            }
 
             /* process the received data */
             if (frame_type == FRAME_BLE_DATA_PDU_LLID_CONTROL) {
@@ -849,8 +843,8 @@ static void process_rx_entry_data_channel(void)
                 packetbuf_set_addr(PACKETBUF_ADDR_SENDER, &sender_addr);
 
                 /* notify upper layers, if complete message was received */
-                if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
-                    PRINTF("ble-controller-input() complete message: %d bytes\n", packetbuf_datalen());
+                if(!more_data || (data_len < 27)) {
+//                    PRINTF("ble-controller-input() complete message: %d bytes\n", packetbuf_datalen());
                     NETSTACK_RDC.input();
                 }
             }
@@ -860,8 +854,8 @@ static void process_rx_entry_data_channel(void)
                 packetbuf_set_datalen(packetbuf_datalen() + data_len);
 
                 /* notify upper layers, if complete message was received */
-                if(!more_data || (next_frame_type == FRAME_BLE_DATA_PDU_LLID_DATA_MESSAGE)) {
-                    PRINTF("ble-controller-input() assemble message: %d bytes\n", packetbuf_datalen());
+                if(!more_data || (data_len < 27)) {
+//                    PRINTF("ble-controller-input() assemble message: %d bytes\n", packetbuf_datalen());
                     NETSTACK_RDC.input();
                 }
             }
