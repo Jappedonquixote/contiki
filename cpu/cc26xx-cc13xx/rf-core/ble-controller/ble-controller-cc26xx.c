@@ -454,6 +454,9 @@ static ble_result_t disconnect(unsigned int connection_handle,
                                unsigned short reason)
 {
     // TODO
+    state = BLE_CONTROLLER_STATE_STANDBY;
+
+
     return BLE_RESULT_NOT_SUPPORTED;
 }
 

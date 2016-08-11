@@ -113,15 +113,15 @@
 
 
 /* 6LoWPAN */
-#define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD       128
+#define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD      1280
 #define SICSLOWPAN_CONF_COMPRESSION          SICSLOWPAN_COMPRESSION_HC06
 #define SICSLOWPAN_CONF_COMPRESSION_THRESHOLD   0   /* always use compression */
-#define SICSLOWPAN_CONF_FRAG                    1
+#define SICSLOWPAN_CONF_FRAG                    0
 
 #define SICSLOWPAN_FRAMER_HDRLEN                0
 
-#define PACKETBUF_CONF_SIZE                   128
-#define QUEUEBUF_CONF_NUM                      12
+#define PACKETBUF_CONF_SIZE                  1280
+#define QUEUEBUF_CONF_NUM                       1
 /** @} */
 /*---------------------------------------------------------------------------*/
 /**

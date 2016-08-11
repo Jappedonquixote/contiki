@@ -88,6 +88,7 @@ static int
 off(void)
 {
     PRINTF("ble-mode off()\n");
+    ble_controller.disconnect(0, 0);
     return 1;
 }
 /*---------------------------------------------------------------------------*/

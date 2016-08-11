@@ -62,8 +62,6 @@ static uint8_t echo_received;
 static uip_ipaddr_t server_addr;
 static struct uip_udp_conn *conn;
 
-static uint8_t payload_data[150];
-
 static uint32_t seq_num;
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_client_process, "BLE UDP client process");
@@ -88,31 +86,32 @@ tcpip_handler(void)
 }
 /*---------------------------------------------------------------------------*/
 static char buf[MAX_PAYLOAD_LEN];
+static char test_char = 0x30;
 static void
 timeout_handler(void)
 {
     uint16_t len;
     seq_num++;
 
-//    if(seq_num % 20 == 5){
-//        len = 100;
-
     if(seq_num % 20 == 1) {
         len = 77;
     } else if(seq_num % 20 == 2){
         len = 154;
-//    } else if(seq_num % 20 == 4){
-//        len = 308;
-//    } else if(seq_num % 20 == 8){
-//        len = 616;
-//    } else if(seq_num % 20 == 16){
-//        len = 1232;
+    } else if(seq_num % 20 == 4){
+        len = 308;
+    } else if(seq_num % 20 == 8){
+        len = 616;
+    } else if(seq_num % 20 == 16){
+        len = 1232;
+        test_char++;
+        if(test_char > 0x7a) {
+            test_char = 0x30;
+        }
     } else {
         return;
     }
 
-    memcpy(buf, payload_data, len);
-//    memset(buf, 'x', len);
+    memset(buf, test_char, len);
     memset(&buf[len], '\0', 1);
 
     printf("sending %d bytes of UDP payload\n", strlen(buf));
@@ -121,12 +120,6 @@ timeout_handler(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_client_process, ev, data)
 {
-    uint8_t i;
-
-    for(i = 0; i < sizeof(payload_data); ++i) {
-        payload_data[i] = 0x20 + (i % 0x40);
-    }
-
     PROCESS_BEGIN();
     PRINTF("BLE UDP client started\n");
 

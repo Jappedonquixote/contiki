@@ -64,25 +64,23 @@
 #define BLE_SLAVE_CONN_INTERVAL_MIN  0x0150
 #define BLE_SLAVE_CONN_INTERVAL_MAX  0x01F0
 
-#define BLE_MAC_L2CAP_SIGNAL_CHANNEL 0x0005
-#define BLE_MAC_L2CAP_FLOW_CHANNEL   0x0041
+#define L2CAP_SIGNAL_CHANNEL 0x0005
+#define L2CAP_FLOW_CHANNEL   0x0041
 
-#define BLE_MAC_L2CAP_CODE_CONN_REQ    0x14
-#define BLE_MAC_L2CAP_CODE_CONN_RSP    0x15
-#define BLE_MAC_L2CAP_CODE_CREDIT      0x16
+#define L2CAP_CODE_CONN_REQ    0x14
+#define L2CAP_CODE_CONN_RSP    0x15
+#define L2CAP_CODE_CREDIT      0x16
 
-#define BLE_MAC_L2CAP_NODE_MTU         1280
-#define BLE_MAC_L2CAP_NODE_MPS         PACKETBUF_SIZE
-#define BLE_MAC_L2CAP_NODE_INIT_CREDITS  10
-#define BLE_MAC_L2CAP_CREDIT_THRESHOLD    2
+#define L2CAP_NODE_MTU         1280
+#define L2CAP_NODE_MPS          128
+#define L2CAP_NODE_INIT_CREDITS  10
+#define L2CAP_CREDIT_THRESHOLD    2
 
-#define BLE_MAC_L2CAP_FIRST_HEADER_SIZE         6
-#define BLE_MAC_L2CAP_SUBSEQ_HEADER_SIZE        4
-
-#define SICSLOWPAN_FIRST_FRAGM_DISPATCH   0b11000
-#define SICSLOWPAN_SUBSEQ_FRAGM_DISPATCH  0b11100
-#define SICSLOWPAN_FIRST_FRAGM_SIZE             4
-#define SICSLOWPAN_SUBSEQ_FRAGM_SIZE            5
+#define L2CAP_FIRST_HEADER_SIZE         6
+#define L2CAP_FIRST_FRAGMENT_SIZE   (L2CAP_NODE_MPS - L2CAP_FIRST_HEADER_SIZE)
+#define L2CAP_SUBSEQ_HEADER_SIZE        4
+#define L2CAP_SUBSEQ_FRAGMENT_SIZE  (L2CAP_NODE_MPS - L2CAP_SUBSEQ_HEADER_SIZE)
+#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 8)
 /*---------------------------------------------------------------------------*/
 /* BLE controller */
 /* public device address of BLE controller */
@@ -94,42 +92,22 @@ static int buffer_len;
 static int num_buffer;
 /*---------------------------------------------------------------------------*/
 /* L2CAP fragmentation buffers and utilities                                 */
-#define L2CAP_FRAG_LEN        BLE_MAC_L2CAP_NODE_MPS
-#define L2CAP_MESG_LEN        BLE_MAC_L2CAP_NODE_MTU
-#define L2CAP_NUM_FRAG        ((uint8_t)(L2CAP_MESG_LEN / L2CAP_FRAG_LEN + 1))
 
 typedef struct {
-    uint8_t *next;
-    uint8_t data[L2CAP_FRAG_LEN]  CC_ALIGN(4);
-    uint8_t data_len;
+    /* L2CAP Service Data Unit (SDU) */
+    uint8_t sdu[L2CAP_NODE_MTU];
+    /* length of the L2CAP SDU */
+    uint16_t sdu_length;
+    /* index of the first byte not sent yet */
+    uint16_t current_index;
+    /* callback for transmit result (only for tx buffers) */
     mac_callback_t sent_callback;
+    /* pointer for transmit result (only for tx buffers) */
     void *ptr;
-} l2cap_buf_t;
+} l2cap_buffer_t;
 
-LIST(l2cap_buf_used);
-MEMB(l2cap_buffers, l2cap_buf_t, L2CAP_NUM_FRAG);
-
-/*---------------------------------------------------------------------------*/
-static l2cap_buf_t* get_l2capbuf()
-{
-    l2cap_buf_t *buf = memb_alloc(&l2cap_buffers);
-    if(buf != NULL) {
-        list_add(l2cap_buf_used, buf);
-    }
-    return buf;
-}
-/*---------------------------------------------------------------------------*/
-static void free_l2capbuf(l2cap_buf_t *buf) {
-    if(buf == NULL) {
-        return;
-    }
-    memb_free(&l2cap_buffers, buf);
-    list_remove(l2cap_buf_used, buf);
-}
-/*---------------------------------------------------------------------------*/
-static uint16_t rx_sdu_len;
-static uint16_t rx_len;
-
+static l2cap_buffer_t tx_buffer;
+static l2cap_buffer_t rx_buffer;
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_mac_process, "BLE MAC process");
 /*---------------------------------------------------------------------------*/
@@ -198,14 +176,11 @@ static void init(void)
 
     PRINTF("[ ble-mac ] init()\n");
 
-    memb_init(&l2cap_buffers);
-    list_init(l2cap_buf_used);
-
     /* initialize the L2CAP connection parameter */
-    l2cap_node.cid = BLE_MAC_L2CAP_FLOW_CHANNEL;
-    l2cap_node.credits = BLE_MAC_L2CAP_NODE_INIT_CREDITS;
-    l2cap_node.mps = BLE_MAC_L2CAP_NODE_MPS;
-    l2cap_node.mtu = BLE_MAC_L2CAP_NODE_MTU;
+    l2cap_node.cid = L2CAP_FLOW_CHANNEL;
+    l2cap_node.credits = L2CAP_NODE_INIT_CREDITS;
+    l2cap_node.mps = L2CAP_NODE_MPS;
+    l2cap_node.mtu = L2CAP_NODE_MTU;
 
     /* Initialize the BLE controller */
     NETSTACK_RADIO.init();
@@ -239,74 +214,31 @@ static void init(void)
 /*---------------------------------------------------------------------------*/
 static void send(mac_callback_t sent_callback, void *ptr)
 {
-    l2cap_buf_t *buf;
-    uint8_t data_len = packetbuf_datalen();
-    uint8_t *data = packetbuf_dataptr();
-    uint8_t dispatch = (data[0] >> 3) & 0x1F;
+    uint16_t data_len = packetbuf_datalen();
 
-    uint16_t uip_len;
-    uint16_t offset;
-
-    if(dispatch == SICSLOWPAN_FIRST_FRAGM_DISPATCH) {
-        if(list_length(l2cap_buf_used) > 0) {
-            PRINTF("ble_mac send() another L2CAP message is currently processed\n");
-            // TODO handle mac_callback accordingly
-            return;
-        }
-
-        buf = get_l2capbuf();
-        if(buf == NULL) {
-            PRINTF("ble_mac send() could not get free L2CAP buffer\n");
-            // TODO handle mac_callback accordingly
-            return;
-        }
-        buf->data_len = data_len - SICSLOWPAN_FIRST_FRAGM_SIZE;
-        memcpy(buf->data, packetbuf_dataptr() + SICSLOWPAN_FIRST_FRAGM_SIZE, buf->data_len);
-        buf->sent_callback = sent_callback;
-        buf->ptr = ptr;
+    if(tx_buffer.current_index != 0) {
+        PRINTF("ble_mac send() another L2CAP message is currently processed\n");
+        // TODO handle mac_callback accordingly
+        return;
     }
-    else if(dispatch == SICSLOWPAN_SUBSEQ_FRAGM_DISPATCH) {
-        buf = get_l2capbuf();
-        if(buf == NULL) {
-            PRINTF("ble_mac send() could not get free L2CAP buffer\n");
-            // TODO handle mac_callback accordingly
-            return;
-        }
-        buf->data_len = data_len - SICSLOWPAN_SUBSEQ_FRAGM_SIZE;
-        memcpy(buf->data, packetbuf_dataptr() + SICSLOWPAN_SUBSEQ_FRAGM_SIZE, buf->data_len);
-        buf->sent_callback = sent_callback;
-        buf->ptr = ptr;
 
-        uip_len = ((data[0] & 0x1F) << 8) + data[1];
-        offset = data[4] * 8;
-        if(uip_len == (offset + buf->data_len)) {
-            process_poll(&ble_mac_process);
-        }
+    if(data_len > L2CAP_NODE_MTU) {
+        PRINTF("ble_mac send() message is too long\n");
+        // TODO handle mac_callback accordingly
+        return;
     }
-    else {
-        if(list_length(l2cap_buf_used) > 0) {
-            PRINTF("ble_mac send() another L2CAP message is currently processed\n");
-            // TODO handle mac_callback accordingly
-            return;
-        }
 
-        buf = get_l2capbuf();
-        if(buf == NULL) {
-            PRINTF("ble_mac send() could not get free L2CAP buffer\n");
-            // TODO handle mac_callback accordingly
-            return;
-        }
+    PRINTF("ble_mac send() sending %d bytes (%d credits left)\n", data_len, l2cap_router.credits);
 
-        buf->data_len = data_len;
-        memcpy(buf->data, packetbuf_dataptr(), data_len);
-        buf->ptr = ptr;
-        buf->sent_callback = sent_callback;
-        process_poll(&ble_mac_process);
-    }
+    tx_buffer.sdu_length = data_len;
+    memcpy(tx_buffer.sdu, packetbuf_dataptr(), data_len);
+    tx_buffer.sent_callback = sent_callback;
+    tx_buffer.ptr = ptr;
+    process_poll(&ble_mac_process);
 }
 
 /*---------------------------------------------------------------------------*/
-void process_l2cap_conn_req(uint8_t *data)
+void l2cap_conn_req(uint8_t *data)
 {
     uint8_t identifier;
     uint16_t len;
@@ -339,7 +271,7 @@ void process_l2cap_conn_req(uint8_t *data)
     resp_data[3] = 0x00;
 
     /* code */
-    resp_data[4] = BLE_MAC_L2CAP_CODE_CONN_RSP;
+    resp_data[4] = L2CAP_CODE_CONN_RSP;
 
     /* identifier */
     resp_data[5] = identifier;
@@ -363,7 +295,7 @@ void process_l2cap_conn_req(uint8_t *data)
 }
 
 /*---------------------------------------------------------------------------*/
-void process_l2cap_credit(uint8_t *data)
+void l2cap_credit(uint8_t *data)
 {
     uint16_t len;
     uint16_t cid;
@@ -386,84 +318,65 @@ void process_l2cap_credit(uint8_t *data)
 }
 
 /*---------------------------------------------------------------------------*/
-static void process_l2cap_frame_signal_channel(uint8_t *data, uint8_t data_len)
+static void l2cap_frame_signal_channel(uint8_t *data, uint8_t data_len)
 {
-    if (data[4] == BLE_MAC_L2CAP_CODE_CONN_REQ) {
-        process_l2cap_conn_req(&data[5]);
-    } else if(data[4] == BLE_MAC_L2CAP_CODE_CREDIT) {
-        process_l2cap_credit(&data[5]);
+    if (data[4] == L2CAP_CODE_CONN_REQ) {
+        l2cap_conn_req(&data[5]);
+    } else if(data[4] == L2CAP_CODE_CREDIT) {
+        l2cap_credit(&data[5]);
     } else {
         PRINTF("process_l2cap_msg: unknown signal channel code: %d\n", data[4]);
     }
 }
-
 /*---------------------------------------------------------------------------*/
-static void process_l2cap_frame_flow_channel(uint8_t *data, uint8_t data_len)
+static void l2cap_frame_flow_channel(uint8_t *data, uint16_t data_len)
 {
-    uint16_t len;
-    uint16_t sdu_len;
-
-    uint16_t datagram_size;
-    uint16_t datagram_tag;
-    uint8_t datagram_offset;
+    uint16_t frame_len;
+    uint16_t payload_len;
 
     if(data_len < 4) {
-        PRINTF("process_l2cap_frame: illegal L2CAP frame data_len: %d\n", data_len);
+        PRINTF("l2cap_frame: illegal L2CAP frame data_len: %d\n", data_len);
         /* a L2CAP frame has a minimum length of 4 */
         return;
     }
 
-    memcpy(&len, &data[0], 2);
-    memcpy(&sdu_len, &data[4], 2);
+    if(rx_buffer.sdu_length == 0) {
+        /* handle first fragment */
+        memcpy(&frame_len, &data[0], 2);
+        memcpy(&rx_buffer.sdu_length, &data[4], 2);
+        payload_len = frame_len - 2;
 
+        PRINTF("l2cap_frame: first fragment (frame_len: %d, sdu_len: %d)\n",
+                frame_len, rx_buffer.sdu_length);
 
-    if(rx_sdu_len != 0) {
-        datagram_size = 0xE000;
-        datagram_size += len / 8;
-        datagram_tag = 0x0000;
-        datagram_offset = rx_len / 8;
-
-        rx_len += len;
-        if(rx_sdu_len == rx_len) {
-            /* clear counter */
-            rx_sdu_len = 0;
-            rx_len = 0;
-        }
-        PRINTF("process_l2cap_frame_flow_channel() datagram_size: %X, datagram_tag: %X, datagram_offset: %X\n", datagram_size, datagram_tag, datagram_offset);
-
-        memset(packetbuf_dataptr(), datagram_size >> 8, 1);
-        memset(packetbuf_dataptr() + 1, datagram_size & 0xFF, 1);
-        memcpy(packetbuf_hdrptr() + 2, &datagram_tag, 2);
-        memcpy(packetbuf_hdrptr() + 4, &datagram_offset, 1);
-
-        NETSTACK_LLSEC.input();
+        memcpy(rx_buffer.sdu, &data[6], payload_len);
+        rx_buffer.current_index = payload_len;
     }
-    else if(sdu_len > (len - 2)) {
-        /* the L2CAP message is fragmented */
-        datagram_size = 0xC000;
-        datagram_size += (len - 2) / 8;
-        datagram_tag = 0x0000;
+    else {
+        /* subsequent fragment */
+        memcpy(&frame_len, &data[0], 2);
+        payload_len = frame_len;
 
-        PRINTF("process_l2cap_frame_flow_channel() datagram_size: %X, datagram_tag: %X\n",
-                datagram_size, datagram_tag);
+        PRINTF("l2cap_frame: subsequent fragment (frame_len: %d)\n", frame_len);
 
-        memmove(packetbuf_dataptr(), packetbuf_dataptr() + 2, len - 2);
-        memset(packetbuf_dataptr(), datagram_size >> 8, 1);
-        memset(packetbuf_dataptr() + 1, datagram_size & 0xFF, 1);
+        memcpy(&rx_buffer.sdu[rx_buffer.current_index], &data[4], payload_len);
+        rx_buffer.current_index += payload_len;
+    }
 
-        memcpy(packetbuf_dataptr() + 2, &datagram_tag, 2);
-
-        /* initialize the counter for the first packet */
-        rx_sdu_len = sdu_len;
-        rx_len = len - 2;
-
+    if((rx_buffer.sdu_length > 0) &&
+       (rx_buffer.sdu_length == rx_buffer.current_index)) {
+        /* a complete message was received */
+        PRINTF("ble_mac_process: complete message received (len: %d)\n",
+               rx_buffer.sdu_length);
+        /* do not use packetbuf_copyfrom here because the packetbuf_attr
+         * must not be cleared */
+        memcpy(packetbuf_dataptr(), rx_buffer.sdu, rx_buffer.sdu_length);
+        packetbuf_set_datalen(rx_buffer.sdu_length);
         NETSTACK_LLSEC.input();
 
-    } else {
-        PRINTF("process_l2cap_frame_flow_channel() complete message\n");
-        /* remove the L2CAP header from the packetbuffer */
-        packetbuf_hdrreduce(BLE_MAC_L2CAP_FIRST_HEADER_SIZE);
-        NETSTACK_LLSEC.input();
+        /* reset counters */
+        rx_buffer.sdu_length = 0;
+        rx_buffer.current_index = 0;
     }
 }
 /*---------------------------------------------------------------------------*/
@@ -482,7 +395,7 @@ static void send_l2cap_credit()
     data[3] = 0x00;
 
     /* code */
-    data[4] = BLE_MAC_L2CAP_CODE_CREDIT;
+    data[4] = L2CAP_CODE_CREDIT;
     /* identifier */
     data[5] = 0xFF;
     /* cmd length */
@@ -490,8 +403,8 @@ static void send_l2cap_credit()
     data[7] = 0x00;
 
     memcpy(&data[8], &l2cap_node.cid, 2);
-    data[10] = BLE_MAC_L2CAP_NODE_INIT_CREDITS & 0xFF;
-    data[11] = BLE_MAC_L2CAP_NODE_INIT_CREDITS >> 8;
+    data[10] = L2CAP_NODE_INIT_CREDITS & 0xFF;
+    data[11] = L2CAP_NODE_INIT_CREDITS >> 8;
 
     packetbuf_copyfrom((void *) data, len + 8);
     NETSTACK_RDC.send(NULL, NULL);
@@ -506,19 +419,19 @@ static void input(void)
 
     memcpy(&channel_id, &data[2], 2);
 
-    PRINTF("ble-mac input: %d bytes\n", len);
+    PRINTF("ble-mac input: %d bytes (%d credits left)\n", len, l2cap_node.credits);
 
     if(len > 0) {
-        if(channel_id == BLE_MAC_L2CAP_SIGNAL_CHANNEL) {
-            process_l2cap_frame_signal_channel(data, len);
+        if(channel_id == L2CAP_SIGNAL_CHANNEL) {
+            l2cap_frame_signal_channel(data, len);
         }
-        else if(channel_id == BLE_MAC_L2CAP_FLOW_CHANNEL) {
-            process_l2cap_frame_flow_channel(data, len);
+        else if(channel_id == L2CAP_FLOW_CHANNEL) {
+            l2cap_frame_flow_channel(data, len);
             /* decrease the credits of the router */
             l2cap_node.credits--;
-            if(l2cap_node.credits <= BLE_MAC_L2CAP_CREDIT_THRESHOLD) {
+            if(l2cap_node.credits <= L2CAP_CREDIT_THRESHOLD) {
                 send_l2cap_credit();
-                l2cap_node.credits += BLE_MAC_L2CAP_NODE_INIT_CREDITS;
+                l2cap_node.credits += L2CAP_NODE_INIT_CREDITS;
             }
         }
         else {
@@ -565,11 +478,8 @@ static struct etimer l2cap_timer;
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_mac_process, ev, data)
 {
-    uint16_t sdu_len = 0;
-    uint16_t mtu_len;
-
-    l2cap_buf_t *buf;
-    l2cap_buf_t *temp;
+    uint16_t data_len;
+    uint16_t frame_len;
 
     PROCESS_BEGIN();
     PRINTF("ble_mac_process started\n");
@@ -578,52 +488,70 @@ PROCESS_THREAD(ble_mac_process, ev, data)
         PROCESS_YIELD();
 
         if(ev == PROCESS_EVENT_POLL) {
-            /* handling a single or the first of several L2CAP packets */
-            buf = list_head(l2cap_buf_used);
-            if(buf != NULL) {
-                packetbuf_copyfrom(buf->data, buf->data_len);
-                packetbuf_hdralloc(BLE_MAC_L2CAP_FIRST_HEADER_SIZE);
+            if(tx_buffer.sdu_length > 0) {
+                /* transmit data */
+                packetbuf_clear();
 
-                /* calculate the SDU from all L2CAP parts */
-                for(temp = buf; temp != NULL; temp = list_item_next(temp)) {
-                    sdu_len += temp->data_len;
-                }
-                mtu_len = buf->data_len + 2;
+                /* create L2CAP header for first L2CAP fragment */
+                packetbuf_hdralloc(L2CAP_FIRST_HEADER_SIZE);
+                /* length of the payload transmitted by this fragment */
+                data_len = MIN(tx_buffer.sdu_length, L2CAP_FIRST_FRAGMENT_SIZE);
+                frame_len = data_len + 2;
 
-                memset(packetbuf_hdrptr(), 0x00, BLE_MAC_L2CAP_FIRST_HEADER_SIZE);
-                memcpy(packetbuf_hdrptr(), &mtu_len, 2);
+                PRINTF("ble_mac_process: transmitting first fragment (frame_len: %d, sdu_len: %d)\n", frame_len, tx_buffer.sdu_length);
+
+                memcpy(packetbuf_hdrptr(), &frame_len, 2);
                 memcpy(packetbuf_hdrptr() + 2, &l2cap_router.cid, 2);
-                memcpy(packetbuf_hdrptr() + 4, &sdu_len, 2);
+                memcpy(packetbuf_hdrptr() + 4, &tx_buffer.sdu_length, 2);
 
-                NETSTACK_RDC.send(buf->sent_callback, buf->ptr);
-                free_l2capbuf(buf);
+                /* copy payload */
+                memcpy(packetbuf_dataptr(), tx_buffer.sdu, data_len);
+                packetbuf_set_datalen(data_len);
+                tx_buffer.current_index += data_len;
 
-                /* check if next L2CAP fragments need to be sent */
-                if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 4));
+                /* send L2CAP fragment */
+                NETSTACK_RDC.send(NULL, NULL);
+
+                if(tx_buffer.current_index == tx_buffer.sdu_length) {
+                    PRINTF("ble_mac_process: transmitting fragment finished\n");
+                    tx_buffer.current_index = 0;
+                }
+                else {
+                    PRINTF("ble_mac_process: another fragment to transmit\n");
+                    etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
                 }
             }
         }
         else if((ev == PROCESS_EVENT_TIMER) && (data == &l2cap_timer)) {
-            /* handle the following L2CAP fragments */
+            if(tx_buffer.sdu_length > 0) {
+                packetbuf_clear();
 
-            buf = list_head(l2cap_buf_used);
-            if(buf != NULL) {
-                packetbuf_copyfrom(buf->data, buf->data_len);
-                packetbuf_hdralloc(BLE_MAC_L2CAP_SUBSEQ_HEADER_SIZE);
-
-                mtu_len = buf->data_len;
-
-                memset(packetbuf_hdrptr(), 0x00, BLE_MAC_L2CAP_SUBSEQ_HEADER_SIZE);
-                memcpy(packetbuf_hdrptr(), &mtu_len, 2);
+                /* create L2CAP header for first L2CAP fragment */
+                packetbuf_hdralloc(L2CAP_SUBSEQ_HEADER_SIZE);
+                /* length of the fragment ( +2: incl. sdu_len field)*/
+                data_len = MIN((tx_buffer.sdu_length - tx_buffer.current_index),
+                              L2CAP_SUBSEQ_FRAGMENT_SIZE);
+                frame_len = data_len;
+                memcpy(packetbuf_hdrptr(), &frame_len, 2);
                 memcpy(packetbuf_hdrptr() + 2, &l2cap_router.cid, 2);
 
-                NETSTACK_RDC.send(buf->sent_callback, buf->ptr);
-                free_l2capbuf(buf);
+                /* copy payload */
+                memcpy(packetbuf_dataptr(),
+                       &tx_buffer.sdu[tx_buffer.current_index],
+                       data_len);
+                packetbuf_set_datalen(data_len);
+                tx_buffer.current_index += data_len;
 
-                /* check if next L2CAP fragments need to be sent */
-                if(list_length(l2cap_buf_used) > 0) {
-                    etimer_set(&l2cap_timer, (CLOCK_SECOND / 8));
+                /* send L2CAP fragment */
+                NETSTACK_RDC.send(NULL, NULL);
+
+                if(tx_buffer.current_index == tx_buffer.sdu_length) {
+                    PRINTF("ble_mac_process: fragment finished\n");
+                    tx_buffer.current_index = 0;
+                }
+                else {
+                    PRINTF("ble_mac_process: next fragment queued\n");
+                    etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
                 }
             }
         }
