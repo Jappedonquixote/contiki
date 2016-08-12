@@ -72,15 +72,15 @@
 #define L2CAP_CODE_CREDIT      0x16
 
 #define L2CAP_NODE_MTU         1280
-#define L2CAP_NODE_MPS          128
+#define L2CAP_NODE_FRAG_LEN      80
 #define L2CAP_NODE_INIT_CREDITS  10
 #define L2CAP_CREDIT_THRESHOLD    2
 
 #define L2CAP_FIRST_HEADER_SIZE         6
-#define L2CAP_FIRST_FRAGMENT_SIZE   (L2CAP_NODE_MPS - L2CAP_FIRST_HEADER_SIZE)
+#define L2CAP_FIRST_FRAGMENT_SIZE   (L2CAP_NODE_FRAG_LEN - L2CAP_FIRST_HEADER_SIZE)
 #define L2CAP_SUBSEQ_HEADER_SIZE        4
-#define L2CAP_SUBSEQ_FRAGMENT_SIZE  (L2CAP_NODE_MPS - L2CAP_SUBSEQ_HEADER_SIZE)
-#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 8)
+#define L2CAP_SUBSEQ_FRAGMENT_SIZE  (L2CAP_NODE_FRAG_LEN - L2CAP_SUBSEQ_HEADER_SIZE)
+#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 128)
 /*---------------------------------------------------------------------------*/
 /* BLE controller */
 /* public device address of BLE controller */
@@ -179,7 +179,7 @@ static void init(void)
     /* initialize the L2CAP connection parameter */
     l2cap_node.cid = L2CAP_FLOW_CHANNEL;
     l2cap_node.credits = L2CAP_NODE_INIT_CREDITS;
-    l2cap_node.mps = L2CAP_NODE_MPS;
+    l2cap_node.mps = L2CAP_NODE_FRAG_LEN;
     l2cap_node.mtu = L2CAP_NODE_MTU;
 
     /* Initialize the BLE controller */
@@ -511,6 +511,8 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 /* send L2CAP fragment */
                 NETSTACK_RDC.send(NULL, NULL);
+                /* decrement the packets available at the router by 1 */
+                l2cap_router.credits--;
 
                 if(tx_buffer.current_index == tx_buffer.sdu_length) {
                     PRINTF("ble_mac_process: transmitting fragment finished\n");
