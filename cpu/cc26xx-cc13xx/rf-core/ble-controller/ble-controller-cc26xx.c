@@ -167,7 +167,7 @@ static rf_ticks_t first_conn_event_anchor;
 #define BLE_RX_BUF_DATA_LEN 60
 #define BLE_RX_BUF_OVERHEAD 8
 #define BLE_RX_BUF_LEN      (BLE_RX_BUF_DATA_LEN + BLE_RX_BUF_OVERHEAD)
-#define BLE_RX_NUM_BUF      10
+#define BLE_RX_NUM_BUF      20
 
 static uint8_t rx_bufs[BLE_RX_NUM_BUF][BLE_RX_BUF_LEN] CC_ALIGN(4);
 
@@ -178,7 +178,7 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_DATA_LEN 27
 #define BLE_TX_BUF_OVERHEAD  9
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
-#define BLE_TX_NUM_BUF      20
+#define BLE_TX_NUM_BUF      40
 
 typedef struct {
     uint8_t data[BLE_TX_BUF_LEN] CC_ALIGN(4);
@@ -602,8 +602,6 @@ static void free_finished_tx_bufs(void)
     tx_buf_t *buf = list_head(tx_buffers_queued);
     rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) buf;
 
-//    uint8_t size = list_length(tx_buffers_queued);
-
     while((buf != NULL) && (e->status == DATA_ENTRY_FINISHED)) {
         /* free memory block */
         memb_free(&tx_buffers, buf);
@@ -614,11 +612,6 @@ static void free_finished_tx_bufs(void)
         buf = list_head(tx_buffers_queued);
         e = (rfc_dataEntryGeneral_t *) buf;
     }
-
-//    if(size > 0) {
-//    PRINTF("free_finished_tx_bufs() freed: %d buffers, %d remaining - memb free: %d\n",
-//            (size - list_length(tx_buffers_queued)), list_length(tx_buffers_queued), memb_numfree(&tx_buffers));
-//    }
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -814,7 +807,6 @@ static void process_rx_entry_data_channel(void)
     linkaddr_t sender_addr;
 
     rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *) current_rx_entry;
-    rfc_dataEntryGeneral_t *next_entry = (rfc_dataEntryGeneral_t *) entry->pNextEntry;
     if(entry->status != DATA_ENTRY_FINISHED) {
         return;
     }

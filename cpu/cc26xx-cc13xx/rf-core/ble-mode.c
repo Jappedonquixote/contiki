@@ -44,7 +44,7 @@
 #include <stdio.h>
 
 /*---------------------------------------------------------------------------*/
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
 #else
@@ -59,7 +59,6 @@ static uint8_t adv_channel_map;
 static int
 init(void)
 {
-    PRINTF("ble-mode init()\n");
     int result = ble_controller.reset();
     return result == BLE_RESULT_OK;
 }
@@ -68,11 +67,11 @@ static int
 send(const void *payload, unsigned short payload_len)
 {
     uint8_t res;
-    PRINTF("ble-mode send()\n");
     res = ble_controller.send((void *) payload, payload_len);
     if(res == BLE_RESULT_OK) {
         return RADIO_TX_OK;
     } else {
+        PRINTF("ble-mode send() error: %d\n", res);
         return RADIO_TX_ERR;
     }
 }
@@ -80,14 +79,12 @@ send(const void *payload, unsigned short payload_len)
 static int
 on(void)
 {
-    PRINTF("ble-mode on()\n");
     return 1;
 }
 /*---------------------------------------------------------------------------*/
 static int
 off(void)
 {
-    PRINTF("ble-mode off()\n");
     ble_controller.disconnect(0, 0);
     return 1;
 }
@@ -95,7 +92,6 @@ off(void)
 static radio_result_t
 get_value(radio_param_t param, radio_value_t *value)
 {
-    PRINTF("ble-mode get_value(%d)\n", param);
     unsigned int temp;
 
   if(!value) {
@@ -123,7 +119,6 @@ get_value(radio_param_t param, radio_value_t *value)
 static radio_result_t
 set_value(radio_param_t param, radio_value_t value)
 {
-    PRINTF("ble-mode set_value(%d)\n", param);
     switch (param)
     {
     case RADIO_PARAM_BLE_ADV_INTERVAL:
@@ -157,7 +152,6 @@ set_value(radio_param_t param, radio_value_t value)
 static radio_result_t
 get_object(radio_param_t param, void *dest, size_t size)
 {
-    PRINTF("ble-mode get_object(%d)\n", param);
     switch(param) {
         case RADIO_CONST_BLE_BD_ADDR:
             if (size != BLE_ADDR_SIZE || !dest) {
@@ -172,7 +166,6 @@ get_object(radio_param_t param, void *dest, size_t size)
 static radio_result_t
 set_object(radio_param_t param, const void *src, size_t size)
 {
-    PRINTF("ble-mode set_object(%d)\n", param);
     switch(param) {
         case RADIO_PARAM_BLE_ADV_PAYLOAD:
             if(size <= 0 || size >= BLE_ADV_DATA_LEN || !src) {

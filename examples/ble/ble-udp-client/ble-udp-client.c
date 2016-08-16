@@ -80,38 +80,46 @@ tcpip_handler(void)
   if(uip_newdata()) {
     str = uip_appdata;
     /* only show the start of the packet */
-    str[MIN(uip_datalen(), 40)] = '\0';
+    str[9] = '\0';
     printf("udp data received: %s\n", str);
   }
 }
 /*---------------------------------------------------------------------------*/
 static char buf[MAX_PAYLOAD_LEN];
 static char test_char = 0x30;
+static uint32_t packet_counter = 0;
 static void
 timeout_handler(void)
 {
     uint16_t len;
     seq_num++;
 
-    if(seq_num % 20 == 1) {
+    if(seq_num % 5 == 1) {
         len = 77;
-    } else if(seq_num % 20 == 2){
+        packet_counter++;
+        test_char = 'A';
+    } else if(seq_num % 5 == 2){
         len = 154;
-    } else if(seq_num % 20 == 4){
+        packet_counter++;
+        test_char = 'B';
+    } else if(seq_num % 5 == 3){
         len = 308;
-    } else if(seq_num % 20 == 8){
+        packet_counter++;
+        test_char = 'C';
+    } else if(seq_num % 5 == 4){
         len = 616;
-    } else if(seq_num % 20 == 16){
+        packet_counter++;
+        test_char = 'D';
+    } else if(seq_num % 5 == 0){
         len = 1232;
-        test_char++;
-        if(test_char > 0x7a) {
-            test_char = 0x30;
-        }
+        packet_counter++;
+        test_char = 'E';
     } else {
         return;
     }
 
-    memset(buf, test_char, len);
+    sprintf(buf, "%08lu", packet_counter);
+    memset(&buf[8], test_char, (len - 8));
     memset(&buf[len], '\0', 1);
 
     printf("sending %d bytes of UDP payload\n", strlen(buf));
