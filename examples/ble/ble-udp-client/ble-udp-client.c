@@ -48,7 +48,9 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
+#define CLIENT_PORT 61616
 #define SERVER_IP   "aaaa::1"
+#define SERVER_PORT 61617
 
 #define ECHO_TIMEOUT (CLOCK_SECOND * 5)
 #define SEND_INTERVAL       (CLOCK_SECOND * 1)
@@ -153,8 +155,8 @@ PROCESS_THREAD(ble_client_process, ev, data)
 
 
     /* new connection with remote host */
-    conn = udp_new(&server_addr, UIP_HTONS(9000), NULL);
-    udp_bind(conn, UIP_HTONS(9001));
+    conn = udp_new(&server_addr, UIP_HTONS(SERVER_PORT), NULL);
+    udp_bind(conn, UIP_HTONS(CLIENT_PORT));
 
     PRINTF("Created a connection with the server ");
     PRINT6ADDR(&conn->ripaddr);
