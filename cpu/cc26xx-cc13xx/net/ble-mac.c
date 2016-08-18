@@ -100,10 +100,10 @@ typedef struct {
     uint16_t sdu_length;
     /* index of the first byte not sent yet */
     uint16_t current_index;
-    /* callback for transmit result (only for tx buffers) */
-    mac_callback_t sent_callback;
-    /* pointer for transmit result (only for tx buffers) */
-    void *ptr;
+//    /* callback for transmit result (only for tx buffers) */
+//    mac_callback_t sent_callback;
+//    /* pointer for transmit result (only for tx buffers) */
+//    void *ptr;
 } l2cap_buffer_t;
 
 static l2cap_buffer_t tx_buffer;
@@ -179,7 +179,7 @@ static void init(void)
     /* initialize the L2CAP connection parameter */
     l2cap_node.cid = L2CAP_FLOW_CHANNEL;
     l2cap_node.credits = L2CAP_NODE_INIT_CREDITS;
-    l2cap_node.mps = L2CAP_NODE_FRAG_LEN;
+    l2cap_node.mps = (L2CAP_NODE_FRAG_LEN - L2CAP_SUBSEQ_HEADER_SIZE);
     l2cap_node.mtu = L2CAP_NODE_MTU;
 
     /* Initialize the BLE controller */
@@ -232,8 +232,7 @@ static void send(mac_callback_t sent_callback, void *ptr)
 
     tx_buffer.sdu_length = data_len;
     memcpy(tx_buffer.sdu, packetbuf_dataptr(), data_len);
-    tx_buffer.sent_callback = sent_callback;
-    tx_buffer.ptr = ptr;
+    mac_call_sent_callback(sent_callback, ptr, MAC_TX_DEFERRED, 1);
     process_poll(&ble_mac_process);
 }
 
@@ -503,8 +502,6 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 if(tx_buffer.current_index == tx_buffer.sdu_length) {
                     tx_buffer.current_index = 0;
-                    mac_call_sent_callback(tx_buffer.sent_callback,
-                                           tx_buffer.ptr, MAC_TX_OK, 1);
                 }
                 else {
                     etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
@@ -515,9 +512,9 @@ PROCESS_THREAD(ble_mac_process, ev, data)
             if(tx_buffer.sdu_length > 0) {
                 packetbuf_clear();
 
-                /* create L2CAP header for first L2CAP fragment */
+                /* create L2CAP header for subsequent L2CAP fragment */
                 packetbuf_hdralloc(L2CAP_SUBSEQ_HEADER_SIZE);
-                /* length of the fragment ( +2: incl. sdu_len field)*/
+                /* length of the fragment */
                 data_len = MIN((tx_buffer.sdu_length - tx_buffer.current_index),
                               L2CAP_SUBSEQ_FRAGMENT_SIZE);
                 frame_len = data_len;
@@ -536,9 +533,7 @@ PROCESS_THREAD(ble_mac_process, ev, data)
 
                 if(tx_buffer.current_index == tx_buffer.sdu_length) {
                     tx_buffer.current_index = 0;
-                    mac_call_sent_callback(tx_buffer.sent_callback,
-                                           tx_buffer.ptr, MAC_TX_OK, 1);
-                }
+               }
                 else {
                     etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
                 }
