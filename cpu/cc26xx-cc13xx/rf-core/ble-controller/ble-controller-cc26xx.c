@@ -180,8 +180,9 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
 #define BLE_TX_NUM_BUF      40
 
-typedef struct {
-    uint8_t data[BLE_TX_BUF_LEN] CC_ALIGN(4);
+typedef struct tx_buf_s {
+    struct tx_buf_s *next;
+    uint8_t data[BLE_TX_BUF_LEN];
 } tx_buf_t;
 
 static dataQueue_t tx_data_queue = { 0 };
@@ -468,6 +469,7 @@ static tx_buf_t* prepare_tx_buf()
     /* allocate a TX buffer */
     tx_buf = memb_alloc(&tx_buffers);
     if(tx_buf != NULL) {
+        memset(tx_buf, 0, sizeof(tx_buf_t));
         list_add(tx_buffers_queued, tx_buf);
     }
     return tx_buf;
@@ -479,12 +481,13 @@ static void prepare_tx_buf_payload(tx_buf_t *tx_buf, void *buf,
 
     uint8_t length = MIN(buf_len, 27);
 
-    rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) tx_buf;
+    rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) tx_buf->data;
 
     /* the buffer length does not contain the frame type byte */
     e->length = length + 1;
     e->config.lenSz = 1;
     e->pNextEntry = NULL;
+    e->status = DATA_ENTRY_PENDING;
 
     /* set the frame type */
     memset(&tx_buf->data[8], frame_type, 1);
@@ -520,11 +523,6 @@ static ble_result_t send(void *buf, unsigned short buf_len)
         }
 
         prepare_tx_buf_payload(tx_buf, &data[i], (buf_len - i), frame_type);
-
-        if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, tx_buf->data) != RF_BLE_CMD_OK) {
-            PRINTF("send() could not add buffer to tx data queue\n");
-            return BLE_RESULT_ERROR;
-        }
     }
     return BLE_RESULT_OK;
 }
@@ -600,17 +598,36 @@ static void free_finished_rx_buf(void)
 static void free_finished_tx_bufs(void)
 {
     tx_buf_t *buf = list_head(tx_buffers_queued);
-    rfc_dataEntryGeneral_t *e = (rfc_dataEntryGeneral_t *) buf;
+    rfc_dataEntryGeneral_t *e;
 
-    while((buf != NULL) && (e->status == DATA_ENTRY_FINISHED)) {
-        /* free memory block */
-        memb_free(&tx_buffers, buf);
+    while(buf != NULL) {
+        e = (rfc_dataEntryGeneral_t *) buf->data;
+        if((e != NULL) && (e->status == DATA_ENTRY_FINISHED)) {
+            /* free memory block */
+            memb_free(&tx_buffers, buf);
 
-        /* remove from queued list */
-        list_pop(tx_buffers_queued);
+            /* remove from queued list */
+            list_pop(tx_buffers_queued);
+        }
+        buf = list_item_next(buf);
+    }
+}
+/*---------------------------------------------------------------------------*/
+static void append_new_tx_bufs(void)
+{
+    tx_buf_t *buf = list_head(tx_buffers_queued);
+    rfc_dataEntryGeneral_t *e;
 
-        buf = list_head(tx_buffers_queued);
-        e = (rfc_dataEntryGeneral_t *) buf;
+    while(buf != NULL) {
+        e = (rfc_dataEntryGeneral_t *) buf ->data;
+        if((e != NULL) && (e->status == DATA_ENTRY_PENDING)) {
+            /* add tx entry to tx queue */
+            if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, buf->data) != RF_BLE_CMD_OK) {
+                PRINTF("send() could not add buffer to tx data queue; e: 0x%04X, tx_data_queue: 0x%04X, data: 0x%04X\n",
+                        e, &tx_data_queue, buf->data);
+            }
+        }
+        buf = list_item_next(buf);
     }
 }
 /*---------------------------------------------------------------------------*/
@@ -869,6 +886,7 @@ state_conn_slave(process_event_t ev, process_data_t data,
     if(ev == rf_core_command_done_event) {
 
         free_finished_tx_bufs();
+        append_new_tx_bufs();
 
         /* check if connection needs to be terminated */
         if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
