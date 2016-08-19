@@ -178,11 +178,15 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_DATA_LEN 27
 #define BLE_TX_BUF_OVERHEAD  9
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
-#define BLE_TX_NUM_BUF      40
+#define BLE_TX_NUM_BUF      60
 
 typedef struct tx_buf_s {
+    /* pointer to the next element, needed for using LIST */
     struct tx_buf_s *next;
+    /* data of the tx_buffer (including the 9 byte header) */
     uint8_t data[BLE_TX_BUF_LEN];
+    /* flag indicating if the entry was already queued to the radio core */
+    uint8_t queued;
 } tx_buf_t;
 
 static dataQueue_t tx_data_queue = { 0 };
@@ -489,6 +493,8 @@ static void prepare_tx_buf_payload(tx_buf_t *tx_buf, void *buf,
     e->pNextEntry = NULL;
     e->status = DATA_ENTRY_PENDING;
 
+    tx_buf->queued = 0;
+
     /* set the frame type */
     memset(&tx_buf->data[8], frame_type, 1);
 
@@ -620,12 +626,13 @@ static void append_new_tx_bufs(void)
 
     while(buf != NULL) {
         e = (rfc_dataEntryGeneral_t *) buf ->data;
-        if((e != NULL) && (e->status == DATA_ENTRY_PENDING)) {
+        if(buf->queued == 0) {
             /* add tx entry to tx queue */
             if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, buf->data) != RF_BLE_CMD_OK) {
-                PRINTF("send() could not add buffer to tx data queue; e: 0x%04X, tx_data_queue: 0x%04X, data: 0x%04X\n",
-                        e, &tx_data_queue, buf->data);
+                PRINTF("send() could not add buffer to tx data queue; tx_data_queue: 0x%04X, data: 0x%04X\n",
+                        &tx_data_queue, buf->data);
             }
+            buf->queued = 1;
         }
         buf = list_item_next(buf);
     }
@@ -888,15 +895,15 @@ state_conn_slave(process_event_t ev, process_data_t data,
         free_finished_tx_bufs();
         append_new_tx_bufs();
 
-        /* check if connection needs to be terminated */
-        if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
-           (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
-           (conn_event.counter > 50)) {
-            PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n");
-            state = BLE_CONTROLLER_STATE_STANDBY;
-            set_adv_enable(1);
-            return;
-        }
+//        /* check if connection needs to be terminated */
+//        if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+//           (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+//           (conn_event.counter > 50)) {
+//            PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n");
+//            state = BLE_CONTROLLER_STATE_STANDBY;
+//            set_adv_enable(1);
+//            return;
+//        }
 
         conn_event.last_status = CMD_GET_STATUS(cmd);
         /* check if the last connection event was executed properly */

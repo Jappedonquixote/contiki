@@ -72,15 +72,15 @@
 #define L2CAP_CODE_CREDIT      0x16
 
 #define L2CAP_NODE_MTU         1280
-#define L2CAP_NODE_FRAG_LEN      80
-#define L2CAP_NODE_INIT_CREDITS  16
+#define L2CAP_NODE_FRAG_LEN     160
+#define L2CAP_NODE_INIT_CREDITS   8
 #define L2CAP_CREDIT_THRESHOLD    2
 
 #define L2CAP_FIRST_HEADER_SIZE         6
 #define L2CAP_FIRST_FRAGMENT_SIZE   (L2CAP_NODE_FRAG_LEN - L2CAP_FIRST_HEADER_SIZE)
 #define L2CAP_SUBSEQ_HEADER_SIZE        4
 #define L2CAP_SUBSEQ_FRAGMENT_SIZE  (L2CAP_NODE_FRAG_LEN - L2CAP_SUBSEQ_HEADER_SIZE)
-#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 64)
+#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 32)
 /*---------------------------------------------------------------------------*/
 /* BLE controller */
 /* public device address of BLE controller */
@@ -100,10 +100,6 @@ typedef struct {
     uint16_t sdu_length;
     /* index of the first byte not sent yet */
     uint16_t current_index;
-//    /* callback for transmit result (only for tx buffers) */
-//    mac_callback_t sent_callback;
-//    /* pointer for transmit result (only for tx buffers) */
-//    void *ptr;
 } l2cap_buffer_t;
 
 static l2cap_buffer_t tx_buffer;
