@@ -178,7 +178,7 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_DATA_LEN 27
 #define BLE_TX_BUF_OVERHEAD  9
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
-#define BLE_TX_NUM_BUF      60
+#define BLE_TX_NUM_BUF      40
 
 typedef struct tx_buf_s {
     /* pointer to the next element, needed for using LIST */

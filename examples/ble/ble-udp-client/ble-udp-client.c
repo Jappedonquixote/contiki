@@ -50,6 +50,7 @@
 
 #define CLIENT_PORT 61616
 #define SERVER_IP   "aaaa::1"
+//#define SERVER_IP   "fe80::21a:7dff:feda:7114"
 #define SERVER_PORT 61617
 
 #define ECHO_TIMEOUT (CLOCK_SECOND * 5)
