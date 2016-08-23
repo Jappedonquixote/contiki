@@ -32,11 +32,10 @@
  * ble-mac.h
  *
  *  Created on: 10. März 2016
- *      Author: Michael Spörk
+ *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
 #ifndef BLE_MAC_H_
 #define BLE_MAC_H_
-
 
 #endif /* BLE_MAC_H_ */

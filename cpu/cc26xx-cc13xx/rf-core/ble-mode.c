@@ -59,130 +59,128 @@ static uint8_t adv_channel_map;
 static int
 init(void)
 {
-    int result = ble_controller.reset();
-    return result == BLE_RESULT_OK;
+  int result = ble_controller.reset();
+  return result == BLE_RESULT_OK;
 }
 /*---------------------------------------------------------------------------*/
 static int
 send(const void *payload, unsigned short payload_len)
 {
-    uint8_t res;
-    res = ble_controller.send((void *) payload, payload_len);
-    if(res == BLE_RESULT_OK) {
-        return RADIO_TX_OK;
-    } else {
-        PRINTF("ble-mode send() error: %d\n", res);
-        return RADIO_TX_ERR;
-    }
+  uint8_t res;
+  res = ble_controller.send((void *)payload, payload_len);
+  if(res == BLE_RESULT_OK) {
+    return RADIO_TX_OK;
+  } else {
+    PRINTF("ble-mode send() error: %d\n", res);
+    return RADIO_TX_ERR;
+  }
 }
 /*---------------------------------------------------------------------------*/
 static int
 on(void)
 {
-    return 1;
+  return 1;
 }
 /*---------------------------------------------------------------------------*/
 static int
 off(void)
 {
-    ble_controller.disconnect(0, 0);
-    return 1;
+  ble_controller.disconnect(0, 0);
+  return 1;
 }
 /*---------------------------------------------------------------------------*/
 static radio_result_t
 get_value(radio_param_t param, radio_value_t *value)
 {
-    unsigned int temp;
+  unsigned int temp;
 
   if(!value) {
     return RADIO_RESULT_INVALID_VALUE;
   }
 
   switch(param) {
-    case RADIO_CONST_CHANNEL_MIN:
-        *value = BLE_DATA_CHANNEL_MIN;
-        return RADIO_RESULT_OK;
-    case RADIO_CONST_CHANNEL_MAX:
-        *value = BLE_DATA_CHANNEL_MAX;
-        return RADIO_RESULT_OK;
-    case RADIO_CONST_BLE_BUFFER_SIZE:
-        ble_controller.read_buffer_size((unsigned int *) value, &temp);
-        return RADIO_RESULT_OK;
-    case RADIO_CONST_BLE_BUFFER_AMOUNT:
-        ble_controller.read_buffer_size(&temp, (unsigned int *) value);
-        return RADIO_RESULT_OK;
-    default:
-        return RADIO_RESULT_NOT_SUPPORTED;
+  case RADIO_CONST_CHANNEL_MIN:
+    *value = BLE_DATA_CHANNEL_MIN;
+    return RADIO_RESULT_OK;
+  case RADIO_CONST_CHANNEL_MAX:
+    *value = BLE_DATA_CHANNEL_MAX;
+    return RADIO_RESULT_OK;
+  case RADIO_CONST_BLE_BUFFER_SIZE:
+    ble_controller.read_buffer_size((unsigned int *)value, &temp);
+    return RADIO_RESULT_OK;
+  case RADIO_CONST_BLE_BUFFER_AMOUNT:
+    ble_controller.read_buffer_size(&temp, (unsigned int *)value);
+    return RADIO_RESULT_OK;
+  default:
+    return RADIO_RESULT_NOT_SUPPORTED;
   }
 }
 /*---------------------------------------------------------------------------*/
 static radio_result_t
 set_value(radio_param_t param, radio_value_t value)
 {
-    switch (param)
-    {
-    case RADIO_PARAM_BLE_ADV_INTERVAL:
-        if((value > BLE_ADV_INTERVAL_MAX) || (value < BLE_ADV_INTERVAL_MIN)) {
-            return RADIO_RESULT_INVALID_VALUE;
-        }
-        adv_interval = (uint16_t) value;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_TYPE:
-        adv_type = value;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_OWN_ADDR_TYPE:
-        adv_own_addr_type = value;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_CHANNEL_MAP:
-        adv_channel_map = value;
-        return RADIO_RESULT_OK;
-    case RADIO_PARAM_BLE_ADV_ENABLE:
-        if(value) {
-            /* set the advertisement parameter before enabling */
-            ble_controller.set_adv_param(adv_interval, adv_type,
-                                         adv_own_addr_type, adv_channel_map);
-        }
-        ble_controller.set_adv_enable(value);
-        return RADIO_RESULT_OK;
-        default:
-            return RADIO_RESULT_NOT_SUPPORTED;
+  switch(param) {
+  case RADIO_PARAM_BLE_ADV_INTERVAL:
+    if((value > BLE_ADV_INTERVAL_MAX) || (value < BLE_ADV_INTERVAL_MIN)) {
+      return RADIO_RESULT_INVALID_VALUE;
     }
+    adv_interval = (uint16_t)value;
+    return RADIO_RESULT_OK;
+  case RADIO_PARAM_BLE_ADV_TYPE:
+    adv_type = value;
+    return RADIO_RESULT_OK;
+  case RADIO_PARAM_BLE_ADV_OWN_ADDR_TYPE:
+    adv_own_addr_type = value;
+    return RADIO_RESULT_OK;
+  case RADIO_PARAM_BLE_ADV_CHANNEL_MAP:
+    adv_channel_map = value;
+    return RADIO_RESULT_OK;
+  case RADIO_PARAM_BLE_ADV_ENABLE:
+    if(value) {
+      /* set the advertisement parameter before enabling */
+      ble_controller.set_adv_param(adv_interval, adv_type,
+                                   adv_own_addr_type, adv_channel_map);
+    }
+    ble_controller.set_adv_enable(value);
+    return RADIO_RESULT_OK;
+  default:
+    return RADIO_RESULT_NOT_SUPPORTED;
+  }
 }
 /*---------------------------------------------------------------------------*/
 static radio_result_t
 get_object(radio_param_t param, void *dest, size_t size)
 {
-    switch(param) {
-        case RADIO_CONST_BLE_BD_ADDR:
-            if (size != BLE_ADDR_SIZE || !dest) {
-                return RADIO_RESULT_INVALID_VALUE;
-            }
-            ble_controller.read_bd_addr(dest);
-            return RADIO_RESULT_OK;
+  switch(param) {
+  case RADIO_CONST_BLE_BD_ADDR:
+    if(size != BLE_ADDR_SIZE || !dest) {
+      return RADIO_RESULT_INVALID_VALUE;
     }
-    return RADIO_RESULT_NOT_SUPPORTED;
+    ble_controller.read_bd_addr(dest);
+    return RADIO_RESULT_OK;
+  }
+  return RADIO_RESULT_NOT_SUPPORTED;
 }
 /*---------------------------------------------------------------------------*/
 static radio_result_t
 set_object(radio_param_t param, const void *src, size_t size)
 {
-    switch(param) {
-        case RADIO_PARAM_BLE_ADV_PAYLOAD:
-            if(size <= 0 || size >= BLE_ADV_DATA_LEN || !src) {
-                return RADIO_RESULT_INVALID_VALUE;
-            }
-            ble_controller.set_adv_data((unsigned short) size, (char *) src);
-            return RADIO_RESULT_OK;
-        case RADIO_PARAM_BLE_ADV_SCAN_RESPONSE:
-            if(size <= 0 || size >= BLE_SCAN_RESP_DATA_LEN || !src) {
-                return RADIO_RESULT_INVALID_VALUE;
-            }
-            ble_controller.set_scan_resp_data((unsigned short) size, (char *) src);
-            return RADIO_RESULT_OK;
+  switch(param) {
+  case RADIO_PARAM_BLE_ADV_PAYLOAD:
+    if(size <= 0 || size >= BLE_ADV_DATA_LEN || !src) {
+      return RADIO_RESULT_INVALID_VALUE;
     }
-    return RADIO_RESULT_NOT_SUPPORTED;
+    ble_controller.set_adv_data((unsigned short)size, (char *)src);
+    return RADIO_RESULT_OK;
+  case RADIO_PARAM_BLE_ADV_SCAN_RESPONSE:
+    if(size <= 0 || size >= BLE_SCAN_RESP_DATA_LEN || !src) {
+      return RADIO_RESULT_INVALID_VALUE;
+    }
+    ble_controller.set_scan_resp_data((unsigned short)size, (char *)src);
+    return RADIO_RESULT_OK;
+  }
+  return RADIO_RESULT_NOT_SUPPORTED;
 }
-
 /*---------------------------------------------------------------------------*/
 const struct radio_driver ble_mode_driver = {
   init,

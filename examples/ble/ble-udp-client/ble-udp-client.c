@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Michael Spörk
+ * Copyright (c) 2016, Michael Spoerk
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,9 +30,9 @@
 /*---------------------------------------------------------------------------*/
 /**
  * \file
- * 		   A test for the Bluetooth Low-Energy radio of Contiki
+ *       A test for the Bluetooth Low-Energy radio of Contiki
  * \author
- *         Michael Spörk <m.spoerk@student.tugraz.at>
+ *         Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
 #include "contiki.h"
@@ -50,7 +50,7 @@
 
 #define CLIENT_PORT 61616
 #define SERVER_IP   "aaaa::1"
-//#define SERVER_IP   "fe80::21a:7dff:feda:7114"
+/*#define SERVER_IP   "fe80::21a:7dff:feda:7114" */
 #define SERVER_PORT 61617
 
 #define ECHO_TIMEOUT (CLOCK_SECOND * 5)
@@ -70,9 +70,11 @@ static uint32_t seq_num;
 PROCESS(ble_client_process, "BLE UDP client process");
 AUTOSTART_PROCESSES(&ble_client_process);
 /*---------------------------------------------------------------------------*/
-void echo_reply_handler(uip_ipaddr_t *source, uint8_t ttl, uint8_t *data, uint16_t datalen) {
-    printf("echo response received\n");
-    echo_received = 1;
+void
+echo_reply_handler(uip_ipaddr_t *source, uint8_t ttl, uint8_t *data, uint16_t datalen)
+{
+  printf("echo response received\n");
+  echo_received = 1;
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -94,88 +96,86 @@ static uint32_t packet_counter = 0;
 static void
 timeout_handler(void)
 {
-    uint16_t len;
-    seq_num++;
+  uint16_t len;
+  seq_num++;
 
-//    if(seq_num % 5 == 1) {
-//        len = 77;
-//        packet_counter++;
-//        test_char = 'A';
-//    } else if(seq_num % 5 == 2){
-//        len = 154;
-//        packet_counter++;
-//        test_char = 'B';
-//    } else if(seq_num % 5 == 3){
-//        len = 308;
-//        packet_counter++;
-//        test_char = 'C';
-//    } else if(seq_num % 5 == 4){
-//        len = 616;
-//        packet_counter++;
-//        test_char = 'D';
-//    } else if(seq_num % 5 == 0){
-    if(seq_num > 0) {
-        len = 1232;
-        packet_counter++;
-        test_char = 'E';
-    } else {
-        return;
-    }
+/*    if(seq_num % 5 == 1) { */
+/*        len = 77; */
+/*        packet_counter++; */
+/*        test_char = 'A'; */
+/*    } else if(seq_num % 5 == 2){ */
+/*        len = 154; */
+/*        packet_counter++; */
+/*        test_char = 'B'; */
+/*    } else if(seq_num % 5 == 3){ */
+/*        len = 308; */
+/*        packet_counter++; */
+/*        test_char = 'C'; */
+/*    } else if(seq_num % 5 == 4){ */
+/*        len = 616; */
+/*        packet_counter++; */
+/*        test_char = 'D'; */
+/*    } else if(seq_num % 5 == 0){ */
+  if(seq_num > 0) {
+    len = 1232;
+    packet_counter++;
+    test_char = 'E';
+  } else {
+    return;
+  }
 
-    sprintf(buf, "%08lu", packet_counter);
-    memset(&buf[8], test_char, (len - 8));
-    memset(&buf[len], '\0', 1);
+  sprintf(buf, "%08lu", packet_counter);
+  memset(&buf[8], test_char, (len - 8));
+  memset(&buf[len], '\0', 1);
 
-//    printf("sending %d bytes of UDP payload\n", strlen(buf));
-    uip_udp_packet_send(conn, buf, strlen(buf));
+/*    printf("sending %d bytes of UDP payload\n", strlen(buf)); */
+  uip_udp_packet_send(conn, buf, strlen(buf));
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_client_process, ev, data)
 {
-    PROCESS_BEGIN();
-    PRINTF("BLE UDP client started\n");
+  PROCESS_BEGIN();
+  PRINTF("BLE UDP client started\n");
 
-    leds_on(LEDS_GREEN);
+  leds_on(LEDS_GREEN);
 
-    /* set address of the server */
-    uiplib_ipaddrconv(SERVER_IP, &server_addr);
-    /* register echo reply handler */
-    uip_icmp6_echo_reply_callback_add(&router_notification, echo_reply_handler);
+  /* set address of the server */
+  uiplib_ipaddrconv(SERVER_IP, &server_addr);
+  /* register echo reply handler */
+  uip_icmp6_echo_reply_callback_add(&router_notification, echo_reply_handler);
 
-    /* wait for an echo request/reply from the router to see that the LL connection is established */
-    do {
-        leds_on(LEDS_RED);
-        uip_icmp6_send(&server_addr, ICMP6_ECHO_REQUEST, 0, 20);
-        printf("echo request sent to server\n");
-        etimer_set(&timer, ECHO_TIMEOUT);
-        PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
+  /* wait for an echo request/reply from the router to see that the LL connection is established */
+  do {
+    leds_on(LEDS_RED);
+    uip_icmp6_send(&server_addr, ICMP6_ECHO_REQUEST, 0, 20);
+    printf("echo request sent to server\n");
+    etimer_set(&timer, ECHO_TIMEOUT);
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
+  } while(!echo_received);
+
+  leds_off(LEDS_RED);
+  printf("starting client connection\n");
+
+  /* new connection with remote host */
+  conn = udp_new(&server_addr, UIP_HTONS(SERVER_PORT), NULL);
+  udp_bind(conn, UIP_HTONS(CLIENT_PORT));
+
+  PRINTF("Created a connection with the server ");
+  PRINT6ADDR(&conn->ripaddr);
+  PRINTF(" local/remote port %u/%u\n",
+         UIP_HTONS(conn->lport), UIP_HTONS(conn->rport));
+
+  etimer_set(&timer, SEND_INTERVAL);
+  while(1) {
+    PROCESS_YIELD();
+    if((ev == PROCESS_EVENT_TIMER) && (data == &timer)) {
+      timeout_handler();
+      etimer_set(&timer, SEND_INTERVAL);
+    } else if(ev == tcpip_event) {
+      tcpip_handler();
     }
-    while(!echo_received);
+  }
 
-    leds_off(LEDS_RED);
-    printf("starting client connection\n");
-
-
-    /* new connection with remote host */
-    conn = udp_new(&server_addr, UIP_HTONS(SERVER_PORT), NULL);
-    udp_bind(conn, UIP_HTONS(CLIENT_PORT));
-
-    PRINTF("Created a connection with the server ");
-    PRINT6ADDR(&conn->ripaddr);
-    PRINTF(" local/remote port %u/%u\n",
-            UIP_HTONS(conn->lport), UIP_HTONS(conn->rport));
-
-    etimer_set(&timer, SEND_INTERVAL);
-    while(1) {
-        PROCESS_YIELD();
-        if((ev == PROCESS_EVENT_TIMER) &&(data == &timer)) {
-            timeout_handler();
-            etimer_set(&timer, SEND_INTERVAL);
-        } else if(ev == tcpip_event) {
-            tcpip_handler();
-        }
-    }
-
-    PROCESS_END();
+  PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/

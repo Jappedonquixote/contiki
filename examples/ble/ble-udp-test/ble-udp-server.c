@@ -30,7 +30,7 @@
 /*---------------------------------------------------------------------------*/
 /**
  * \file
- * 		   A test for the Bluetooth Low-Energy radio of Contiki
+ *       A test for the Bluetooth Low-Energy radio of Contiki
  * \author
  *         Michael Spörk <m.spoerk@student.tugraz.at>
  */
@@ -56,7 +56,7 @@
 #define SEND_INTERVAL       10 * CLOCK_SECOND
 static struct etimer timer;
 
-//#define ROUTER_ADDR "aaaa::21a:7dff:feda:7114"
+/*#define ROUTER_ADDR "aaaa::21a:7dff:feda:7114" */
 #define ROUTER_ADDR "fe80::21a:7dff:feda:7114"
 
 static uip_ipaddr_t router_addr;
@@ -71,9 +71,11 @@ static struct uip_udp_conn *conn;
 PROCESS(ble_server_process, "BLE UDP server process");
 AUTOSTART_PROCESSES(&ble_server_process);
 /*---------------------------------------------------------------------------*/
-void echo_reply_handler(uip_ipaddr_t *source, uint8_t ttl, uint8_t *data, uint16_t datalen) {
-    printf("echo response received\n");
-    echo_received = 1;
+void
+echo_reply_handler(uip_ipaddr_t *source, uint8_t ttl, uint8_t *data, uint16_t datalen)
+{
+  printf("echo response received\n");
+  echo_received = 1;
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -101,42 +103,41 @@ tcpip_handler(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_server_process, ev, data)
 {
-	PROCESS_BEGIN();
-	leds_on(LEDS_GREEN);
+  PROCESS_BEGIN();
+  leds_on(LEDS_GREEN);
 
-	printf("BLE UDP server started\n");
+  printf("BLE UDP server started\n");
 
-	/* set address of router */
-	uiplib_ipaddrconv(ROUTER_ADDR, &router_addr);
-	/* register echo reply handler */
-	uip_icmp6_echo_reply_callback_add(&router_notification, echo_reply_handler);
+  /* set address of router */
+  uiplib_ipaddrconv(ROUTER_ADDR, &router_addr);
+  /* register echo reply handler */
+  uip_icmp6_echo_reply_callback_add(&router_notification, echo_reply_handler);
 
-	/* wait for an echo request/reply from the router to see that the LL connection is established */
-	do {
-	    leds_on(LEDS_RED);
-	    uip_icmp6_send(&router_addr, ICMP6_ECHO_REQUEST, 0, 20);
-	    printf("echo request sent to router\n");
-	    etimer_set(&timer, ECHO_TIMEOUT);
-	    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
-	}
-	while(!echo_received);
+  /* wait for an echo request/reply from the router to see that the LL connection is established */
+  do {
+    leds_on(LEDS_RED);
+    uip_icmp6_send(&router_addr, ICMP6_ECHO_REQUEST, 0, 20);
+    printf("echo request sent to router\n");
+    etimer_set(&timer, ECHO_TIMEOUT);
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
+  } while(!echo_received);
 
-	leds_off(LEDS_RED);
-	uiplib_ipaddrconv(SERVER_IP, &client_addr);
+  leds_off(LEDS_RED);
+  uiplib_ipaddrconv(SERVER_IP, &client_addr);
 
-	conn = udp_new(NULL, UIP_HTONS(3001), NULL);
-	udp_bind(conn, UIP_HTONS(3000));
+  conn = udp_new(NULL, UIP_HTONS(3001), NULL);
+  udp_bind(conn, UIP_HTONS(3000));
 
-    PRINTF("Created server socket local/remote port %u/%u\n",
-            UIP_HTONS(conn->lport), UIP_HTONS(conn->rport));
+  PRINTF("Created server socket local/remote port %u/%u\n",
+         UIP_HTONS(conn->lport), UIP_HTONS(conn->rport));
 
-	while(1) {
-	    PROCESS_YIELD();
-	    if(ev == tcpip_event) {
-	        tcpip_handler();
-	    }
-	}
+  while(1) {
+    PROCESS_YIELD();
+    if(ev == tcpip_event) {
+      tcpip_handler();
+    }
+  }
 
-    PROCESS_END();
+  PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/

@@ -120,6 +120,9 @@ else
 	$(SRFPROG) -t 'soc(XDS-0000000C)' -e all -p 'epfw(0)' -v rb -f $(CONTIKI_PROJECT).hex -a 0x0
 endif
 
+format:
+	$(CONTIKI)/tools/code-style/uncrustify.exe --no-backup --replace -c $(CONTIKI)/tools/code-style/uncrustify.cfg `find $(CONTIKI)/cpu/cc26xx-cc13xx/ -type f -name "*.[ch]"`
+
 ### We don't really need the .hex and .bin for the .$(TARGET) but let's make
 ### sure they get built
 %.$(TARGET): %.elf %.hex %.bin

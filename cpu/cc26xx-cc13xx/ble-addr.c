@@ -45,28 +45,28 @@
 void
 ble_addr_cpy_to(uint8_t *dst)
 {
-    int i;
-    uint8_t *location = (uint8_t *) BLE_ADDR_LOCATION;
+  int i;
+  uint8_t *location = (uint8_t *)BLE_ADDR_LOCATION;
 
-    for(i = 0; i < BLE_ADDR_SIZE; i++) {
-        dst[i] = location[BLE_ADDR_SIZE - 1 -i];
-    }
+  for(i = 0; i < BLE_ADDR_SIZE; i++) {
+    dst[i] = location[BLE_ADDR_SIZE - 1 - i];
+  }
 }
-
 /*---------------------------------------------------------------------------*/
-void ble_addr_to_eui64(uint8_t *dst, uint8_t *src)
+void
+ble_addr_to_eui64(uint8_t *dst, uint8_t *src)
 {
-    /* insert 0xFFFE in the middle */
-    memcpy(dst, src, 3);
-    dst[3] = 0xFF;
-    dst[4] = 0xFE;
-    memcpy(&dst[5], &src[3], 3);
+  /* insert 0xFFFE in the middle */
+  memcpy(dst, src, 3);
+  dst[3] = 0xFF;
+  dst[4] = 0xFE;
+  memcpy(&dst[5], &src[3], 3);
 }
-
 /*---------------------------------------------------------------------------*/
-void ble_eui64_addr_cpy_to(uint8_t *dst)
+void
+ble_eui64_addr_cpy_to(uint8_t *dst)
 {
-    uint8_t ble_addr[BLE_ADDR_SIZE];
-    ble_addr_cpy_to(ble_addr);
-    ble_addr_to_eui64(dst, ble_addr);
+  uint8_t ble_addr[BLE_ADDR_SIZE];
+  ble_addr_cpy_to(ble_addr);
+  ble_addr_to_eui64(dst, ble_addr);
 }

@@ -55,10 +55,9 @@
 /*---------------------------------------------------------------------------*/
 /* Type of BLE device address */
 typedef enum {
-    BLE_ADDR_TYPE_PUBLIC,
-    BLE_ADDR_TYPE_RANDOM
+  BLE_ADDR_TYPE_PUBLIC,
+  BLE_ADDR_TYPE_RANDOM
 } ble_addr_type_t;
-
 
 /** @} */
 /*---------------------------------------------------------------------------*/

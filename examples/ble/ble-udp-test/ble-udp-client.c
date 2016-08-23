@@ -30,7 +30,7 @@
 /*---------------------------------------------------------------------------*/
 /**
  * \file
- * 		   A test for the Bluetooth Low-Energy radio of Contiki
+ *       A test for the Bluetooth Low-Energy radio of Contiki
  * \author
  *         Michael Spörk <m.spoerk@student.tugraz.at>
  */
@@ -56,7 +56,7 @@
 
 static struct etimer timer;
 
-//#define ROUTER_ADDR "aaaa::21a:7dff:feda:7114"
+/*#define ROUTER_ADDR "aaaa::21a:7dff:feda:7114" */
 #define ROUTER_ADDR "fe80::21a:7dff:feda:7114"
 
 static uip_ipaddr_t router_addr;
@@ -71,9 +71,11 @@ static uint32_t seq_num;
 PROCESS(ble_client_process, "BLE UDP client process");
 AUTOSTART_PROCESSES(&ble_client_process);
 /*---------------------------------------------------------------------------*/
-void echo_reply_handler(uip_ipaddr_t *source, uint8_t ttl, uint8_t *data, uint16_t datalen) {
-    printf("echo response received\n");
-    echo_received = 1;
+void
+echo_reply_handler(uip_ipaddr_t *source, uint8_t ttl, uint8_t *data, uint16_t datalen)
+{
+  printf("echo response received\n");
+  echo_received = 1;
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -94,73 +96,71 @@ static void
 timeout_handler(void)
 {
 
-    // TODO: if the UDP payload is longer than 81 bytes, the whole UDP datagram
-    // is not transmitted
-    memset(buf, 0x23, (seq_num % 200));
-    memset(&buf[seq_num % 200], '\0', 1);
+  /* TODO: if the UDP payload is longer than 81 bytes, the whole UDP datagram */
+  /* is not transmitted */
+  memset(buf, 0x23, (seq_num % 200));
+  memset(&buf[seq_num % 200], '\0', 1);
 
-    //  if(seq_num % 10) {
-    //      sprintf(buf, "%04lu - this is a test packet", seq_num);
-    //  }
-    //  else {
-    //      sprintf(buf, "%04lu - this packet is a long packet, which does not fit into a single BLE data frame. It is 107 bytes long.", seq_num);
-    //  }
+  /*  if(seq_num % 10) { */
+  /*      sprintf(buf, "%04lu - this is a test packet", seq_num); */
+  /*  } */
+  /*  else { */
+  /*      sprintf(buf, "%04lu - this packet is a long packet, which does not fit into a single BLE data frame. It is 107 bytes long.", seq_num); */
+  /*  } */
 
-//    seq_num++;
+/*    seq_num++; */
 
-    seq_num += 40;
+  seq_num += 40;
 
-    printf("Send server request     :  %d bytes\n", strlen(buf));
-    uip_udp_packet_send(conn, buf, strlen(buf));
+  printf("Send server request     :  %d bytes\n", strlen(buf));
+  uip_udp_packet_send(conn, buf, strlen(buf));
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_client_process, ev, data)
 {
-    PROCESS_BEGIN();
-    PRINTF("BLE UDP client started\n");
+  PROCESS_BEGIN();
+  PRINTF("BLE UDP client started\n");
 
-    leds_on(LEDS_GREEN);
+  leds_on(LEDS_GREEN);
 
-    /* set address of router */
-    uiplib_ipaddrconv(ROUTER_ADDR, &router_addr);
-    uiplib_ipaddrconv(SERVER_IP, &server_addr);
-    /* register echo reply handler */
-    uip_icmp6_echo_reply_callback_add(&router_notification, echo_reply_handler);
+  /* set address of router */
+  uiplib_ipaddrconv(ROUTER_ADDR, &router_addr);
+  uiplib_ipaddrconv(SERVER_IP, &server_addr);
+  /* register echo reply handler */
+  uip_icmp6_echo_reply_callback_add(&router_notification, echo_reply_handler);
 
-    /* wait for an echo request/reply from the router to see that the LL connection is established */
-    do {
-        leds_on(LEDS_RED);
-        uip_icmp6_send(&server_addr, ICMP6_ECHO_REQUEST, 0, 20);
-        printf("echo request sent to server\n");
-        etimer_set(&timer, ECHO_TIMEOUT);
-        PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
+  /* wait for an echo request/reply from the router to see that the LL connection is established */
+  do {
+    leds_on(LEDS_RED);
+    uip_icmp6_send(&server_addr, ICMP6_ECHO_REQUEST, 0, 20);
+    printf("echo request sent to server\n");
+    etimer_set(&timer, ECHO_TIMEOUT);
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
+  } while(!echo_received);
+
+  leds_off(LEDS_RED);
+  printf("starting client connection\n");
+
+  /* new connection with remote host */
+  conn = udp_new(&server_addr, UIP_HTONS(9000), NULL);
+  udp_bind(conn, UIP_HTONS(9001));
+
+  PRINTF("Created a connection with the server ");
+  PRINT6ADDR(&conn->ripaddr);
+  PRINTF(" local/remote port %u/%u\n",
+         UIP_HTONS(conn->lport), UIP_HTONS(conn->rport));
+
+  etimer_set(&timer, SEND_INTERVAL);
+  while(1) {
+    PROCESS_YIELD();
+    if(etimer_expired(&timer)) {
+      timeout_handler();
+      etimer_restart(&timer);
+    } else if(ev == tcpip_event) {
+      tcpip_handler();
     }
-    while(!echo_received);
+  }
 
-    leds_off(LEDS_RED);
-    printf("starting client connection\n");
-
-
-    /* new connection with remote host */
-    conn = udp_new(&server_addr, UIP_HTONS(9000), NULL);
-    udp_bind(conn, UIP_HTONS(9001));
-
-    PRINTF("Created a connection with the server ");
-    PRINT6ADDR(&conn->ripaddr);
-    PRINTF(" local/remote port %u/%u\n",
-            UIP_HTONS(conn->lport), UIP_HTONS(conn->rport));
-
-    etimer_set(&timer, SEND_INTERVAL);
-    while(1) {
-        PROCESS_YIELD();
-        if(etimer_expired(&timer)) {
-            timeout_handler();
-            etimer_restart(&timer);
-        } else if(ev == tcpip_event) {
-            tcpip_handler();
-        }
-    }
-
-    PROCESS_END();
+  PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/

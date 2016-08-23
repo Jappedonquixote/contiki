@@ -30,7 +30,7 @@
 /*---------------------------------------------------------------------------*/
 /**
  * \file
- * 		   A test for the Bluetooth Low-Energy radio of Contiki
+ *       A test for the Bluetooth Low-Energy radio of Contiki
  * \author
  *         Michael Spörk <m.spoerk@student.tugraz.at>
  */
@@ -46,14 +46,13 @@ AUTOSTART_PROCESSES(&ble_test_process);
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_test_process, ev, data)
 {
-	PROCESS_BEGIN();
-	leds_on(LEDS_GREEN);
+  PROCESS_BEGIN();
+  leds_on(LEDS_GREEN);
 
-	while(1)
-	{
-	    PROCESS_YIELD();
-	}
+  while(1) {
+    PROCESS_YIELD();
+  }
 
-    PROCESS_END();
+  PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
