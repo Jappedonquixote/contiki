@@ -50,14 +50,18 @@
 #define PRINTF(...)
 #endif
 /*---------------------------------------------------------------------------*/
-typedef struct default_ble_tx_power_s {
-   uint16_t ib:6;
-   uint16_t gc:2;
-   uint16_t boost:1;
-   uint16_t temp_coeff:7;
-} default_ble_tx_power_t;
+typedef struct tx_power_config {
+  uint8_t register_ib;
+  uint8_t register_gc;
+  uint8_t temp_coeff;
+} tx_power_config_t;
 
-static default_ble_tx_power_t tx_power = { 0x29, 0x00, 0x00, 0x00 };
+/* values for a selection of available TX powers (values from SmartRF Studio) */
+//static tx_power_config_t tx_power  = {0x30, 0x00, 0x93};    // +5 dBm
+static tx_power_config_t tx_power  = {0x21, 0x01, 0x31};    //  0 dBm
+//static tx_power_config_t tx_power  = {0x0E, 0x01, 0x19};    // -9 dBm
+//static tx_power_config_t tx_power  = {0x07, 0x03, 0x0C};    //-21 dBm
+
 /*---------------------------------------------------------------------------*/
 /* BLE overrides */
 static uint32_t ble_overrides[] = {
@@ -265,10 +269,9 @@ unsigned short rf_ble_cmd_setup_ble_mode(void)
     /* Create radio setup command */
     rf_core_init_radio_op((rfc_radioOp_t *)&cmd, sizeof(cmd), CMD_RADIO_SETUP);
 
-    cmd.txPower.IB = tx_power.ib;
-    cmd.txPower.GC = tx_power.gc;
+    cmd.txPower.IB = tx_power.register_ib;
+    cmd.txPower.GC = tx_power.register_gc;
     cmd.txPower.tempCoeff = tx_power.temp_coeff;
-    cmd.txPower.boost = tx_power.boost;
     cmd.pRegOverride = ble_overrides;
     cmd.mode = 0;
 

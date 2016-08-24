@@ -129,7 +129,7 @@ init_adv_data(char *adv_data)
   /* TX power level */
   adv_data[adv_data_len++] = 2;
   adv_data[adv_data_len++] = 0x0A;
-  adv_data[adv_data_len++] = 0;        /* 0 dBm; TODO: get actual tx power value */
+  adv_data[adv_data_len++] = 0;        /* 0 dBm */
   /* service UUIDs (16-bit identifiers) */
   adv_data[adv_data_len++] = 3;
   adv_data[adv_data_len++] = 0x03;
