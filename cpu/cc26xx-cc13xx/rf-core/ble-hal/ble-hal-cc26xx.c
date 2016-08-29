@@ -29,16 +29,17 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-controller.c
+ * ble-hal-cc26xx.c
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
+#include <ble-hal.h>
+#include <rf-core/ble-hal/rf-ble-cmd.h>
 #include "lpm.h"
 
 #include "sys/process.h"
 
-#include "dev/ble-controller.h"
 #include "dev/oscillators.h"
 
 #include "ble-addr.h"
@@ -50,8 +51,6 @@
 #include "rf-core/api/data_entry.h"
 #include "rf-core/rf-core.h"
 #include "rf-core/api/ble_cmd.h"
-#include "rf-core/ble-controller/rf-ble-cmd.h"
-
 #include "lib/memb.h"
 #include "lib/list.h"
 
@@ -540,7 +539,7 @@ send_list(struct ble_buf_list *list)
   return BLE_RESULT_NOT_SUPPORTED;
 }
 /*---------------------------------------------------------------------------*/
-const struct ble_controller_driver ble_controller =
+const struct ble_hal_driver ble_hal =
 {
   reset,
   read_bd_addr,

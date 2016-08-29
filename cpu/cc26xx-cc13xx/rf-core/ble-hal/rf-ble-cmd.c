@@ -34,9 +34,8 @@
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
+#include <rf-core/ble-hal/rf-ble-cmd.h>
 #include "contiki.h"
-
-#include "rf-ble-cmd.h"
 
 #include "rf-core/api/ble_cmd.h"
 #include "rf-core/rf-core.h"

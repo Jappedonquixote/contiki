@@ -34,13 +34,12 @@
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
+#include <ble-hal.h>
 #include "net/ble-mac.h"
 #include "net/packetbuf.h"
 #include "net/netstack.h"
 #include "net/frame-ble.h"
 #include "net/ip/uip.h"
-
-#include "dev/ble-controller.h"
 
 #include "sys/etimer.h"
 

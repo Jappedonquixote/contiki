@@ -29,16 +29,45 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-controller-cc26xx.h
+ * rf-ble-cmd.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef CPU_CC26XX_CC13XX_DEV_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_H_
-#define CPU_CC26XX_CC13XX_DEV_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_H_
+#ifndef CPU_CC26XX_CC13XX_RF_CORE_BLE_HAL_RF_BLE_CMD_H_
+#define CPU_CC26XX_CC13XX_RF_CORE_BLE_HAL_RF_BLE_CMD_H_
 
-#include "ble-controller.h"
+#include <ble-hal.h>
+#include "rf-core/api/common_cmd.h"
+#include "ble-addr.h"
 
-extern const struct ble_controller_driver ble_controller;
+#define RF_BLE_CMD_OK    1
+#define RF_BLE_CMD_ERROR 0
 
-#endif /* CPU_CC26XX_CC13XX_DEV_BLE_CONTROLLER_BLE_CONTROLLER_CC26XX_H_ */
+
+unsigned short rf_ble_cmd_send(uint8_t *cmd);
+
+unsigned short rf_ble_cmd_wait(uint8_t *cmd);
+
+unsigned short rf_ble_cmd_setup_ble_mode(void);
+
+void rf_ble_cmd_create_adv_cmd(uint8_t *command, uint8_t channel,
+                               uint8_t *param, uint8_t *output);
+
+void rf_ble_cmd_create_adv_params(uint8_t *param, dataQueue_t *rx_queue,
+                           uint8_t adv_data_len, uint8_t *adv_data,
+                           uint8_t scan_resp_data_len, uint8_t *scan_resp_data,
+                           ble_addr_type_t own_addr_type, uint8_t *own_addr);
+
+void rf_ble_cmd_create_slave_cmd(uint8_t *cmd, uint8_t channel, uint8_t *params,
+                                 uint8_t *output, uint32_t start_time);
+
+void rf_ble_cmd_create_slave_params(uint8_t *params, dataQueue_t *rx_queue,
+                         dataQueue_t *tx_queue, uint32_t access_address,
+                         uint8_t crc_init_0, uint8_t crc_init_1,
+                         uint8_t crc_init_2, uint32_t win_size,
+                         uint32_t window_widening, uint8_t first_packet);
+
+unsigned short rf_ble_cmd_add_data_queue_entry(dataQueue_t *q, uint8_t *e);
+
+#endif /* CPU_CC26XX_CC13XX_RF_CORE_BLE_HAL_RF_BLE_CMD_H_ */

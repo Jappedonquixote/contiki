@@ -29,13 +29,13 @@
  */
 /*---------------------------------------------------------------------------*/
 /*
- * ble-controller.h
+ * ble-hal.h
  *
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
-#ifndef BLE_CONTROLLER_H_
-#define BLE_CONTROLLER_H_
+#ifndef BLE_HAL_H_
+#define BLE_HAL_H_
 
 #include <stddef.h>
 
@@ -158,7 +158,7 @@ enum {
 /**
  * The structure of a ble radio controller driver in Contiki.
  */
-struct ble_controller_driver {
+struct ble_hal_driver {
 
   /*------------------------------------------------------------------------*/
   /* GENERAL COMMANDS                                                       */
@@ -316,4 +316,4 @@ struct ble_controller_driver {
   ble_result_t (*send_list) (struct ble_buf_list *list);
 };
 
-#endif /* BLE_CONTROLLER_H_ */
+#endif /* BLE_HAL_H_ */

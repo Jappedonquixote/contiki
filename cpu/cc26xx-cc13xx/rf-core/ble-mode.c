@@ -34,11 +34,10 @@
  *      Author: Michael Spoerk <m.spoerk@student.tugraz.at>
  */
 
+#include <ble-hal.h>
+#include <rf-core/ble-hal/ble-hal-cc26xx.h>
 #include "contiki.h"
 #include "dev/radio.h"
-
-#include "dev/ble-controller.h"
-#include "rf-core/ble-controller/ble-controller-cc26xx.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -59,7 +58,7 @@ static uint8_t adv_channel_map;
 static int
 init(void)
 {
-  int result = ble_controller.reset();
+  int result = ble_hal.reset();
   return result == BLE_RESULT_OK;
 }
 /*---------------------------------------------------------------------------*/
@@ -67,7 +66,7 @@ static int
 send(const void *payload, unsigned short payload_len)
 {
   uint8_t res;
-  res = ble_controller.send((void *)payload, payload_len);
+  res = ble_hal.send((void *)payload, payload_len);
   if(res == BLE_RESULT_OK) {
     return RADIO_TX_OK;
   } else {
@@ -85,7 +84,7 @@ on(void)
 static int
 off(void)
 {
-  ble_controller.disconnect(0, 0);
+  ble_hal.disconnect(0, 0);
   return 1;
 }
 /*---------------------------------------------------------------------------*/
@@ -106,10 +105,10 @@ get_value(radio_param_t param, radio_value_t *value)
     *value = BLE_DATA_CHANNEL_MAX;
     return RADIO_RESULT_OK;
   case RADIO_CONST_BLE_BUFFER_SIZE:
-    ble_controller.read_buffer_size((unsigned int *)value, &temp);
+    ble_hal.read_buffer_size((unsigned int *)value, &temp);
     return RADIO_RESULT_OK;
   case RADIO_CONST_BLE_BUFFER_AMOUNT:
-    ble_controller.read_buffer_size(&temp, (unsigned int *)value);
+    ble_hal.read_buffer_size(&temp, (unsigned int *)value);
     return RADIO_RESULT_OK;
   default:
     return RADIO_RESULT_NOT_SUPPORTED;
@@ -138,10 +137,10 @@ set_value(radio_param_t param, radio_value_t value)
   case RADIO_PARAM_BLE_ADV_ENABLE:
     if(value) {
       /* set the advertisement parameter before enabling */
-      ble_controller.set_adv_param(adv_interval, adv_type,
+      ble_hal.set_adv_param(adv_interval, adv_type,
                                    adv_own_addr_type, adv_channel_map);
     }
-    ble_controller.set_adv_enable(value);
+    ble_hal.set_adv_enable(value);
     return RADIO_RESULT_OK;
   default:
     return RADIO_RESULT_NOT_SUPPORTED;
@@ -156,7 +155,7 @@ get_object(radio_param_t param, void *dest, size_t size)
     if(size != BLE_ADDR_SIZE || !dest) {
       return RADIO_RESULT_INVALID_VALUE;
     }
-    ble_controller.read_bd_addr(dest);
+    ble_hal.read_bd_addr(dest);
     return RADIO_RESULT_OK;
   }
   return RADIO_RESULT_NOT_SUPPORTED;
@@ -170,13 +169,13 @@ set_object(radio_param_t param, const void *src, size_t size)
     if(size <= 0 || size >= BLE_ADV_DATA_LEN || !src) {
       return RADIO_RESULT_INVALID_VALUE;
     }
-    ble_controller.set_adv_data((unsigned short)size, (char *)src);
+    ble_hal.set_adv_data((unsigned short)size, (char *)src);
     return RADIO_RESULT_OK;
   case RADIO_PARAM_BLE_ADV_SCAN_RESPONSE:
     if(size <= 0 || size >= BLE_SCAN_RESP_DATA_LEN || !src) {
       return RADIO_RESULT_INVALID_VALUE;
     }
-    ble_controller.set_scan_resp_data((unsigned short)size, (char *)src);
+    ble_hal.set_scan_resp_data((unsigned short)size, (char *)src);
     return RADIO_RESULT_OK;
   }
   return RADIO_RESULT_NOT_SUPPORTED;
