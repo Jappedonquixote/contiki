@@ -107,7 +107,7 @@ static rf_ticks_t adv_event_next;
 /*---------------------------------------------------------------------------*/
 /* CONNECTION                                                                */
 #define CONN_EVENT_NUM_DATA_CHANNELS       37
-#define CONN_EVENT_WINDOW_WIDENING       4000   /* 1 ms */
+#define CONN_EVENT_WINDOW_WIDENING       2000   /* 0.5 ms */
 
 typedef struct {
   uint8_t initiator_address[6];
@@ -626,10 +626,8 @@ static void
 append_new_tx_bufs(void)
 {
   tx_buf_t *buf = list_head(tx_buffers_queued);
-  rfc_dataEntryGeneral_t *e;
 
   while(buf != NULL) {
-    e = (rfc_dataEntryGeneral_t *)buf->data;
     if(buf->queued == 0) {
       /* add tx entry to tx queue */
       if(rf_ble_cmd_add_data_queue_entry(&tx_data_queue, buf->data) != RF_BLE_CMD_OK) {
@@ -896,21 +894,26 @@ state_conn_slave(process_event_t ev, process_data_t data,
     free_finished_tx_bufs();
     append_new_tx_bufs();
 
-/*        / * check if connection needs to be terminated * / */
-/*        if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) && */
-/*           (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) && */
-/*           (conn_event.counter > 50)) { */
-/*            PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n"); */
-/*            state = BLE_CONTROLLER_STATE_STANDBY; */
-/*            set_adv_enable(1); */
-/*            return; */
-/*        } */
+    // check if connection needs to be terminated
+    // only check after the first x connection events to prevent
+    // initial connection hurdles to cause a disconnect
+    if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+            (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+            (conn_event.counter > 5)) {
+        PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n");
+        state = BLE_CONTROLLER_STATE_STANDBY;
+        set_adv_enable(1);
+        return;
+    }
 
     conn_event.last_status = CMD_GET_STATUS(cmd);
     /* check if the last connection event was executed properly */
     if(conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
       PRINTF("command status: 0x%04X; connection event counter: %d\n",
              CMD_GET_STATUS(cmd), conn_event.counter);
+      PRINTF("command_status_flags: crc_err: %d, ignored: %d, md: %d, ack: %d\n",
+              o->pktStatus.bLastCrcErr, o->pktStatus.bLastIgnored,
+              o->pktStatus.bLastMd, o->pktStatus.bLastAck);
     }
 
     /* calculate parameters for upcoming connection event */
