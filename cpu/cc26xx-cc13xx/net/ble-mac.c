@@ -205,7 +205,7 @@ init(void)
   /* enable advertisement */
   NETSTACK_RADIO.set_value(RADIO_PARAM_BLE_ADV_ENABLE, 1);
 
-  ble_mac_driver.on();
+  NETSTACK_MAC.on();
 }
 /*---------------------------------------------------------------------------*/
 static void
