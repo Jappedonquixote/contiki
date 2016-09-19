@@ -916,13 +916,13 @@ state_conn_slave(process_event_t ev, process_data_t data,
 
     conn_event.last_status = CMD_GET_STATUS(cmd);
     /* check if the last connection event was executed properly */
-    if(conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
-      PRINTF("command status: 0x%04X; connection event counter: %d\n",
-             CMD_GET_STATUS(cmd), conn_event.counter);
-      PRINTF("command_status_flags: crc_err: %d, ignored: %d, md: %d, ack: %d\n",
-              o->pktStatus.bLastCrcErr, o->pktStatus.bLastIgnored,
-              o->pktStatus.bLastMd, o->pktStatus.bLastAck);
-    }
+//    if(conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) {
+//      PRINTF("command status: 0x%04X; connection event counter: %d\n",
+//             CMD_GET_STATUS(cmd), conn_event.counter);
+//      PRINTF("command_status_flags: crc_err: %d, ignored: %d, md: %d, ack: %d\n",
+//              o->pktStatus.bLastCrcErr, o->pktStatus.bLastIgnored,
+//              o->pktStatus.bLastMd, o->pktStatus.bLastAck);
+//    }
 
     /* calculate parameters for upcoming connection event */
     if(o->pktStatus.bTimeStampValid) {
