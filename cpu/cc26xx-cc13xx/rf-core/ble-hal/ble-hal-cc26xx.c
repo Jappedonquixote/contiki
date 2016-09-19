@@ -106,7 +106,7 @@ static rf_ticks_t adv_event_next;
 /*---------------------------------------------------------------------------*/
 /* CONNECTION                                                                */
 #define CONN_EVENT_NUM_DATA_CHANNELS       37
-#define CONN_EVENT_WINDOW_WIDENING       2000   /* 0.5 ms */
+#define CONN_EVENT_WINDOW_WIDENING       3000   /* 0.75 ms */
 
 typedef struct {
   uint8_t initiator_address[6];
@@ -178,6 +178,8 @@ static uint8_t *current_rx_entry;
 #define BLE_TX_BUF_OVERHEAD  9
 #define BLE_TX_BUF_LEN      (BLE_TX_BUF_OVERHEAD + BLE_TX_BUF_DATA_LEN)
 #define BLE_TX_NUM_BUF      60
+
+#define BLE_BUFFER_SIZE    255  // maximum size of the data buffer
 
 typedef struct tx_buf_s {
   /* pointer to the next element, needed for using LIST */
@@ -264,7 +266,7 @@ LPM_MODULE(cc26xx_ble_lpm_module, request, NULL, NULL, LPM_DOMAIN_NONE);
 /*---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------*/
-PROCESS(ble_controller_process, "BLE/CC26xx process");
+PROCESS(ble_hal_process, "BLE/CC26xx process");
 /*---------------------------------------------------------------------------*/
 static void
 setup_buffers(void)
@@ -323,8 +325,8 @@ reset(void)
   state = BLE_CONTROLLER_STATE_STANDBY;
 
   /* start the BLE controller process, if it is not currently running */
-  if(!process_is_running(&ble_controller_process)) {
-    process_start(&ble_controller_process, NULL);
+  if(!process_is_running(&ble_hal_process)) {
+    process_start(&ble_hal_process, NULL);
   }
   return BLE_RESULT_OK;
 }
@@ -340,7 +342,13 @@ static ble_result_t
 read_buffer_size(unsigned int *buf_len,
                  unsigned int *num_buf)
 {
-  return BLE_RESULT_NOT_SUPPORTED;
+    uint16_t ll_bufs = memb_numfree(&tx_buffers);
+    uint16_t buffers = (uint8_t) ll_bufs / 10;
+    uint16_t buffer_size = BLE_BUFFER_SIZE;
+
+    memcpy(buf_len, &buffer_size, 2);
+    memcpy(num_buf, &buffers, 2);
+    return BLE_RESULT_OK;
 }
 /*---------------------------------------------------------------------------*/
 static ble_result_t
@@ -505,7 +513,7 @@ static ble_result_t
 send(void *buf, unsigned short buf_len)
 {
   tx_buf_t *tx_buf;
-  uint8_t i;
+  uint16_t i;
   uint8_t frame_type;
   uint8_t *data = (uint8_t *)buf;
 
@@ -896,14 +904,15 @@ state_conn_slave(process_event_t ev, process_data_t data,
     // check if connection needs to be terminated
     // only check after the first x connection events to prevent
     // initial connection hurdles to cause a disconnect
-    if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
-            (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
-            (conn_event.counter > 5)) {
-        PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n");
-        state = BLE_CONTROLLER_STATE_STANDBY;
-        set_adv_enable(1);
-        return;
-    }
+    // TODO maybe include this for later
+//    if((conn_event.last_status != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+//            (CMD_GET_STATUS(cmd) != RF_CORE_RADIO_OP_STATUS_BLE_DONE_OK) &&
+//            (conn_event.counter > 5)) {
+//        PRINTF("ble_controller 2 consecutive conn events were unsuccessful\n");
+//        state = BLE_CONTROLLER_STATE_STANDBY;
+//        set_adv_enable(1);
+//        return;
+//    }
 
     conn_event.last_status = CMD_GET_STATUS(cmd);
     /* check if the last connection event was executed properly */
@@ -955,7 +964,7 @@ state_conn_slave(process_event_t ev, process_data_t data,
   }
 }
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(ble_controller_process, ev, data)
+PROCESS_THREAD(ble_hal_process, ev, data)
 {
   PROCESS_BEGIN();
   PRINTF("ble_controller_process started\n");

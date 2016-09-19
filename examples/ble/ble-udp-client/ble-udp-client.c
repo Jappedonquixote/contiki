@@ -99,23 +99,23 @@ timeout_handler(void)
   uint16_t len;
   seq_num++;
 
-/*    if(seq_num % 5 == 1) { */
-/*        len = 77; */
-/*        packet_counter++; */
-/*        test_char = 'A'; */
-/*    } else if(seq_num % 5 == 2){ */
-/*        len = 154; */
-/*        packet_counter++; */
-/*        test_char = 'B'; */
-/*    } else if(seq_num % 5 == 3){ */
-/*        len = 308; */
-/*        packet_counter++; */
-/*        test_char = 'C'; */
-/*    } else if(seq_num % 5 == 4){ */
-/*        len = 616; */
-/*        packet_counter++; */
-/*        test_char = 'D'; */
-/*    } else if(seq_num % 5 == 0){ */
+//    if(seq_num % 5 == 1) {
+//        len = 77;
+//        packet_counter++;
+//        test_char = 'A';
+//    } else if(seq_num % 5 == 2){
+//        len = 154;
+//        packet_counter++;
+//        test_char = 'B';
+//    } else if(seq_num % 5 == 3){
+//        len = 308;
+//        packet_counter++;
+//        test_char = 'C';
+//    } else if(seq_num % 5 == 4){
+//        len = 616;
+//        packet_counter++;
+//        test_char = 'D';
+//    } else if(seq_num % 5 == 0){
   if(seq_num > 0) {
     len = 1232;
     packet_counter++;

@@ -115,9 +115,9 @@ CUSTOM_RULE_LINK=1
 
 upload:
 ifdef HEXFILE
-	$(SRFPROG) -t 'soc(XDS-0000000C)' -e all -p 'epfw(0)' -v rb -f $(HEXFILE) -a 0x0
+	$(SRFPROG) -t 'soc(XDS-0000000S)' -e all -p 'epfw(0)' -v rb -f $(HEXFILE) -a 0x0
 else
-	$(SRFPROG) -t 'soc(XDS-0000000C)' -e all -p 'epfw(0)' -v rb -f $(CONTIKI_PROJECT).hex -a 0x0
+	$(SRFPROG) -t 'soc(XDS-0000000S)' -e all -p 'epfw(0)' -v rb -f $(CONTIKI_PROJECT).hex -a 0x0
 endif
 
 format:

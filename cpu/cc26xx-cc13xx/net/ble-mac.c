@@ -71,7 +71,7 @@
 #define L2CAP_CODE_CREDIT      0x16
 
 #define L2CAP_NODE_MTU         1280
-#define L2CAP_NODE_FRAG_LEN     160
+#define L2CAP_NODE_FRAG_LEN     255
 #define L2CAP_NODE_INIT_CREDITS   8
 #define L2CAP_CREDIT_THRESHOLD    2
 
@@ -79,7 +79,7 @@
 #define L2CAP_FIRST_FRAGMENT_SIZE   (L2CAP_NODE_FRAG_LEN - L2CAP_FIRST_HEADER_SIZE)
 #define L2CAP_SUBSEQ_HEADER_SIZE        4
 #define L2CAP_SUBSEQ_FRAGMENT_SIZE  (L2CAP_NODE_FRAG_LEN - L2CAP_SUBSEQ_HEADER_SIZE)
-#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 32)
+#define L2CAP_TRANSMISSION_DELAY    (CLOCK_SECOND / 64)
 /*---------------------------------------------------------------------------*/
 /* BLE controller */
 /* public device address of BLE controller */
@@ -440,12 +440,12 @@ off(int keep_radio_on)
   process_exit(&ble_mac_process);
   return NETSTACK_RDC.off(keep_radio_on);
 }
-/*---------------------------------------------------------------------------*/
-static unsigned short
-channel_check_interval(void)
-{
-  return 0;
-}
+///*---------------------------------------------------------------------------*/
+//static unsigned short
+//channel_check_interval(void)
+//{
+//  return 0;
+//}
 /*---------------------------------------------------------------------------*/
 const struct mac_driver ble_mac_driver = {
   "ble_mac_connection_based",
@@ -454,7 +454,7 @@ const struct mac_driver ble_mac_driver = {
   input,
   on,
   off,
-  channel_check_interval,
+  NULL,
 };
 
 static struct etimer l2cap_timer;
@@ -464,70 +464,85 @@ PROCESS_THREAD(ble_mac_process, ev, data)
   uint16_t data_len;
   uint16_t frame_len;
 
+  uint16_t num_buffer;
+
   PROCESS_BEGIN();
 
   while(1) {
     PROCESS_YIELD();
-
     if(ev == PROCESS_EVENT_POLL) {
       if(tx_buffer.sdu_length > 0) {
-        /* transmit data */
-        packetbuf_clear();
+          NETSTACK_RADIO.get_value(RADIO_CONST_BLE_BUFFER_AMOUNT, &num_buffer);
+          if(num_buffer > 0) {
+            /* transmit data */
+            packetbuf_clear();
 
-        /* create L2CAP header for first L2CAP fragment */
-        packetbuf_hdralloc(L2CAP_FIRST_HEADER_SIZE);
-        /* length of the payload transmitted by this fragment */
-        data_len = MIN(tx_buffer.sdu_length, L2CAP_FIRST_FRAGMENT_SIZE);
-        frame_len = data_len + 2;
+            /* create L2CAP header for first L2CAP fragment */
+            packetbuf_hdralloc(L2CAP_FIRST_HEADER_SIZE);
+            /* length of the payload transmitted by this fragment */
+            data_len = MIN(tx_buffer.sdu_length, L2CAP_FIRST_FRAGMENT_SIZE);
+            frame_len = data_len + 2;
 
-        memcpy(packetbuf_hdrptr(), &frame_len, 2);
-        memcpy(packetbuf_hdrptr() + 2, &l2cap_router.cid, 2);
-        memcpy(packetbuf_hdrptr() + 4, &tx_buffer.sdu_length, 2);
+            memcpy(packetbuf_hdrptr(), &frame_len, 2);
+            memcpy(packetbuf_hdrptr() + 2, &l2cap_router.cid, 2);
+            memcpy(packetbuf_hdrptr() + 4, &tx_buffer.sdu_length, 2);
 
-        /* copy payload */
-        memcpy(packetbuf_dataptr(), tx_buffer.sdu, data_len);
-        packetbuf_set_datalen(data_len);
-        tx_buffer.current_index += data_len;
+            /* copy payload */
+            memcpy(packetbuf_dataptr(), tx_buffer.sdu, data_len);
+            packetbuf_set_datalen(data_len);
+            tx_buffer.current_index += data_len;
 
-        /* send L2CAP fragment */
-        NETSTACK_RDC.send(NULL, NULL);
-        /* decrement the packets available at the router by 1 */
-        l2cap_router.credits--;
+            /* send L2CAP fragment */
+            NETSTACK_RDC.send(NULL, NULL);
+            /* decrement the packets available at the router by 1 */
+            l2cap_router.credits--;
 
-        if(tx_buffer.current_index == tx_buffer.sdu_length) {
-          tx_buffer.current_index = 0;
-        } else {
-          etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
-        }
+            if(tx_buffer.current_index == tx_buffer.sdu_length) {
+              tx_buffer.current_index = 0;
+            } else {
+              etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
+            }
+          }
+          else {
+              // no buffer is free, wait and try later
+              etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
+          }
       }
     } else if((ev == PROCESS_EVENT_TIMER) && (data == &l2cap_timer)) {
       if(tx_buffer.sdu_length > 0) {
-        packetbuf_clear();
+          NETSTACK_RADIO.get_value(RADIO_CONST_BLE_BUFFER_AMOUNT, &num_buffer);
+          if(num_buffer > 0) {
+            packetbuf_clear();
 
-        /* create L2CAP header for subsequent L2CAP fragment */
-        packetbuf_hdralloc(L2CAP_SUBSEQ_HEADER_SIZE);
-        /* length of the fragment */
-        data_len = MIN((tx_buffer.sdu_length - tx_buffer.current_index),
-                       L2CAP_SUBSEQ_FRAGMENT_SIZE);
-        frame_len = data_len;
-        memcpy(packetbuf_hdrptr(), &frame_len, 2);
-        memcpy(packetbuf_hdrptr() + 2, &l2cap_router.cid, 2);
+            /* create L2CAP header for subsequent L2CAP fragment */
+            packetbuf_hdralloc(L2CAP_SUBSEQ_HEADER_SIZE);
+            /* length of the fragment */
+            data_len = MIN((tx_buffer.sdu_length - tx_buffer.current_index),
+                           L2CAP_SUBSEQ_FRAGMENT_SIZE);
+            frame_len = data_len;
+            memcpy(packetbuf_hdrptr(), &frame_len, 2);
+            memcpy(packetbuf_hdrptr() + 2, &l2cap_router.cid, 2);
 
-        /* copy payload */
-        memcpy(packetbuf_dataptr(),
-               &tx_buffer.sdu[tx_buffer.current_index],
-               data_len);
-        packetbuf_set_datalen(data_len);
-        tx_buffer.current_index += data_len;
+            /* copy payload */
+            memcpy(packetbuf_dataptr(),
+                   &tx_buffer.sdu[tx_buffer.current_index],
+                   data_len);
+            packetbuf_set_datalen(data_len);
+            tx_buffer.current_index += data_len;
 
-        /* send L2CAP fragment */
-        NETSTACK_RDC.send(NULL, NULL);
+            /* send L2CAP fragment */
+            NETSTACK_RDC.send(NULL, NULL);
 
-        if(tx_buffer.current_index == tx_buffer.sdu_length) {
-          tx_buffer.current_index = 0;
-        } else {
-          etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
-        }
+            if(tx_buffer.current_index == tx_buffer.sdu_length) {
+              tx_buffer.current_index = 0;
+            } else {
+              etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
+            }
+          }
+          else {
+              // no buffer is free, wait and try later
+              etimer_set(&l2cap_timer, L2CAP_TRANSMISSION_DELAY);
+          }
       }
     }
   }

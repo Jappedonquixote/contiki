@@ -54,6 +54,7 @@ static uint16_t adv_interval;
 static ble_adv_type_t adv_type;
 static ble_addr_type_t adv_own_addr_type;
 static uint8_t adv_channel_map;
+static uint16_t buffer_size = 0;
 /*---------------------------------------------------------------------------*/
 static int
 init(void)
@@ -105,7 +106,10 @@ get_value(radio_param_t param, radio_value_t *value)
     *value = BLE_DATA_CHANNEL_MAX;
     return RADIO_RESULT_OK;
   case RADIO_CONST_BLE_BUFFER_SIZE:
-    ble_hal.read_buffer_size((unsigned int *)value, &temp);
+      if(buffer_size == 0) {
+          ble_hal.read_buffer_size((unsigned int *)&buffer_size, &temp);
+      }
+      memcpy(value, &buffer_size, 2);
     return RADIO_RESULT_OK;
   case RADIO_CONST_BLE_BUFFER_AMOUNT:
     ble_hal.read_buffer_size(&temp, (unsigned int *)value);
