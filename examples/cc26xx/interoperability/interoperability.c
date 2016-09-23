@@ -48,13 +48,14 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
-#define CLIENT_PORT 3001
-#define SERVER_IP   "aaaa::25a:11ff:fe62:4f61"
+#define CLIENT_PORT 60001
+#define SERVER_IP   "2001:db8::25a:11ff:fe62:4f61"
+//#define SERVER_IP   "fe80::25a:11ff:fe62:4f61"
 /*#define SERVER_IP   "fe80::21a:7dff:feda:7114" */
-#define SERVER_PORT 3000
+#define SERVER_PORT 60000
 
 #define ECHO_TIMEOUT        (CLOCK_SECOND * 1)
-#define SEND_INTERVAL       (CLOCK_SECOND * 1)
+#define SEND_INTERVAL       (CLOCK_SECOND * 5)
 #define MAX_PAYLOAD_LEN     1280
 
 static struct etimer timer;
@@ -96,46 +97,46 @@ static uint32_t packet_counter = 0;
 static void
 timeout_handler(void)
 {
-    printf("Client sending to: ");
-    PRINT6ADDR(&conn->ripaddr);
-    sprintf(buf, "Hello %d from the client", ++packet_counter);
-    printf(" (msg: %s)\n", buf);
-    uip_udp_packet_send(conn, buf, strlen(buf));
+//    printf("Client sending to: ");
+//    PRINT6ADDR(&conn->ripaddr);
+//    sprintf(buf, "Hello %d from the client", ++packet_counter);
+//    printf(" (msg: %s)\n", buf);
+//    uip_udp_packet_send(conn, buf, strlen(buf));
 
-//  uint16_t len;
-//  seq_num++;
-//
-////    if(seq_num % 5 == 1) {
-////        len = 77;
-////        packet_counter++;
-////        test_char = 'A';
-////    } else if(seq_num % 5 == 2){
-////        len = 154;
-////        packet_counter++;
-////        test_char = 'B';
-////    } else if(seq_num % 5 == 3){
-////        len = 308;
-////        packet_counter++;
-////        test_char = 'C';
-////    } else if(seq_num % 5 == 4){
-////        len = 616;
-////        packet_counter++;
-////        test_char = 'D';
-////    } else if(seq_num % 5 == 0){
-//  if(seq_num > 0) {
+  uint16_t len;
+  seq_num++;
+
+//    if(seq_num % 5 == 1) {
+        len = 128;
+        packet_counter++;
+        test_char = 'A';
+//    } else if(seq_num % 5 == 2){
+//        len = 128;
+//        packet_counter++;
+//        test_char = 'B';
+//    } else if(seq_num % 5 == 3){
+//        len = 256;
+//        packet_counter++;
+//        test_char = 'C';
+//    } else if(seq_num % 5 == 4){
+//        len = 616;
+//        packet_counter++;
+//        test_char = 'D';
+//    } else if(seq_num % 5 == 0){
+////  if(seq_num > 0) {
 //    len = 1232;
 //    packet_counter++;
 //    test_char = 'E';
 //  } else {
 //    return;
 //  }
-//
-//  sprintf(buf, "%08lu", packet_counter);
-//  memset(&buf[8], test_char, (len - 8));
-//  memset(&buf[len], '\0', 1);
-//
-///*    printf("sending %d bytes of UDP payload\n", strlen(buf)); */
-//  uip_udp_packet_send(conn, buf, strlen(buf));
+
+  sprintf(buf, "%08lu", packet_counter);
+  memset(&buf[8], test_char, (len - 8));
+  memset(&buf[len], '\0', 1);
+
+  printf("sending %d bytes of UDP payload\n", strlen(buf));
+  uip_udp_packet_send(conn, buf, strlen(buf));
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_client_process, ev, data)
@@ -154,7 +155,7 @@ PROCESS_THREAD(ble_client_process, ev, data)
   do {
     leds_on(LEDS_RED);
     uip_icmp6_send(&server_addr, ICMP6_ECHO_REQUEST, 0, 20);
-    printf("echo request sent to server\n");
+    printf("echo request sent to server:\n");
     etimer_set(&timer, ECHO_TIMEOUT);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
   } while(!echo_received);
