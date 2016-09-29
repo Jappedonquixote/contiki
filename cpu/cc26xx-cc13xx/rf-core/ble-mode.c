@@ -68,6 +68,7 @@ send(const void *payload, unsigned short payload_len)
 {
   uint8_t res;
   res = ble_hal.send((void *)payload, payload_len);
+  PRINTF("ble-mode send() %d bytes\n", payload_len);
   if(res == BLE_RESULT_OK) {
     return RADIO_TX_OK;
   } else {

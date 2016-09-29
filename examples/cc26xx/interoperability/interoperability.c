@@ -41,6 +41,7 @@
 #include "net/ip/uiplib.h"
 #include "net/ipv6/uip-icmp6.h"
 #include "dev/leds.h"
+#include "ti-lib.h"
 
 #include <string.h>
 #include <stdbool.h>
@@ -48,15 +49,19 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
-#define CLIENT_PORT 60001
-#define SERVER_IP   "2001:db8::25a:11ff:fe62:4f61"
-//#define SERVER_IP   "fe80::25a:11ff:fe62:4f61"
-/*#define SERVER_IP   "fe80::21a:7dff:feda:7114" */
-#define SERVER_PORT 60000
+#define CLIENT_PORT 61617
+/* nRF52 */
+//#define SERVER_IP   "2001:db8::25a:11ff:fe62:4f61"
+/* border router */
+#define SERVER_IP   "fe80::21a:7dff:feda:7114"
+#define SERVER_PORT 61616
 
 #define ECHO_TIMEOUT        (CLOCK_SECOND * 1)
 #define SEND_INTERVAL       (CLOCK_SECOND * 5)
 #define MAX_PAYLOAD_LEN     1280
+
+#define IPV6_OVERHEAD_LEN   48
+#define TEST_PAYLOAD_LEN    1280
 
 static struct etimer timer;
 
@@ -66,7 +71,11 @@ static uint8_t echo_received;
 static uip_ipaddr_t server_addr;
 static struct uip_udp_conn *conn;
 
-static uint32_t seq_num;
+static uint32_t packet_counter = 0;
+
+#define PACKET_OFFSET        2
+#define PACKET_COUNT         20
+static uint32_t latency[PACKET_COUNT];
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_client_process, "BLE UDP client process");
 AUTOSTART_PROCESSES(&ble_client_process);
@@ -84,65 +93,73 @@ tcpip_handler(void)
   char *str;
 
   if(uip_newdata()) {
+    ti_lib_gpio_pin_write(BOARD_IOID_DP0, 0);
     str = uip_appdata;
     /* only show the start of the packet */
     str[9] = '\0';
     printf("udp data received: %s\n", str);
+    if(packet_counter >= PACKET_OFFSET) {
+        latency[packet_counter - PACKET_OFFSET] = RTIMER_NOW() - latency[packet_counter - PACKET_OFFSET];
+    }
   }
 }
 /*---------------------------------------------------------------------------*/
 static char buf[MAX_PAYLOAD_LEN];
-static char test_char = 0x30;
-static uint32_t packet_counter = 0;
 static void
 timeout_handler(void)
 {
-//    printf("Client sending to: ");
-//    PRINT6ADDR(&conn->ripaddr);
-//    sprintf(buf, "Hello %d from the client", ++packet_counter);
-//    printf(" (msg: %s)\n", buf);
-//    uip_udp_packet_send(conn, buf, strlen(buf));
+    uint16_t len = (TEST_PAYLOAD_LEN - IPV6_OVERHEAD_LEN);
+    uint8_t test_char;
+    test_char = 'X';
 
-  uint16_t len;
-  seq_num++;
-
-//    if(seq_num % 5 == 1) {
-        len = 128;
-        packet_counter++;
-        test_char = 'A';
-//    } else if(seq_num % 5 == 2){
-//        len = 128;
-//        packet_counter++;
-//        test_char = 'B';
-//    } else if(seq_num % 5 == 3){
-//        len = 256;
-//        packet_counter++;
-//        test_char = 'C';
-//    } else if(seq_num % 5 == 4){
-//        len = 616;
-//        packet_counter++;
-//        test_char = 'D';
-//    } else if(seq_num % 5 == 0){
-////  if(seq_num > 0) {
-//    len = 1232;
-//    packet_counter++;
-//    test_char = 'E';
-//  } else {
-//    return;
-//  }
-
+    packet_counter++;
   sprintf(buf, "%08lu", packet_counter);
   memset(&buf[8], test_char, (len - 8));
   memset(&buf[len], '\0', 1);
 
   printf("sending %d bytes of UDP payload\n", strlen(buf));
+
+  ti_lib_gpio_pin_write(BOARD_IOID_DP0, 1);
+
+  if(packet_counter >= PACKET_OFFSET) {
+      latency[packet_counter - PACKET_OFFSET] = RTIMER_NOW();
+  }
   uip_udp_packet_send(conn, buf, strlen(buf));
 }
+
+void print_latency_data() {
+    uint16_t i;
+    uint32_t sum = latency[0];
+    uint32_t min = latency[0];
+    uint32_t max = latency[0];
+    for(i = 1; i < PACKET_COUNT; i++) {
+        sum += latency[i];
+        if(min > latency[i]) {
+            min = latency[i];
+        }
+        if(max < latency[i]) {
+            max = latency[i];
+        }
+    }
+    PRINTF("latency of the last %d packets:\n", PACKET_COUNT);
+    PRINTF("avg: %lu (ticks)\n", (sum / PACKET_COUNT));
+    PRINTF("min: %lu (ticks)\n", min);
+    PRINTF("max: %lu (ticks)\n", max);
+}
+#define BUTTON_GPIO_CFG         (IOC_CURRENT_2MA  | IOC_STRENGTH_AUTO | \
+                                 IOC_IOPULL_UP    | IOC_SLEW_DISABLE  | \
+                                 IOC_HYST_DISABLE | IOC_BOTH_EDGES    | \
+                                 IOC_INT_ENABLE   | IOC_IOMODE_NORMAL | \
+                                 IOC_NO_WAKE_UP   | IOC_INPUT_ENABLE)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_client_process, ev, data)
 {
   PROCESS_BEGIN();
   PRINTF("BLE UDP client started\n");
+
+  ti_lib_rom_ioc_pin_type_gpio_output(BOARD_IOID_DP0);
+  ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 1);
+
 
   leds_on(LEDS_GREEN);
 
@@ -153,15 +170,15 @@ PROCESS_THREAD(ble_client_process, ev, data)
 
   /* wait for an echo request/reply from the router to see that the LL connection is established */
   do {
+      ti_lib_gpio_pin_toggle((1 << BOARD_IOID_DP0));
     leds_on(LEDS_RED);
     uip_icmp6_send(&server_addr, ICMP6_ECHO_REQUEST, 0, 20);
-    printf("echo request sent to server:\n");
     etimer_set(&timer, ECHO_TIMEOUT);
+    leds_off(LEDS_RED);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&timer));
   } while(!echo_received);
 
-  leds_off(LEDS_RED);
-  printf("starting client connection\n");
+  PRINTF("starting client connection\n");
 
   /* new connection with remote host */
   conn = udp_new(&server_addr, UIP_HTONS(SERVER_PORT), NULL);
@@ -178,6 +195,12 @@ PROCESS_THREAD(ble_client_process, ev, data)
     if((ev == PROCESS_EVENT_TIMER) && (data == &timer)) {
       timeout_handler();
       etimer_set(&timer, SEND_INTERVAL);
+
+      if(packet_counter > (PACKET_OFFSET +  PACKET_COUNT)) {
+          print_latency_data();
+          packet_counter=0;
+      }
+
     } else if(ev == tcpip_event) {
       tcpip_handler();
     }
