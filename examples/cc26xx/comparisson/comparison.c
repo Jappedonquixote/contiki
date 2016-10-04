@@ -46,7 +46,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define DEBUG DEBUG_NONE
+#define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
 #define CLIENT_PORT 61617
@@ -72,6 +72,7 @@ static uip_ipaddr_t server_addr;
 static struct uip_udp_conn *conn;
 
 static uint32_t packet_counter = 0;
+static uint32_t sequence_number = 0;
 #define PACKET_COUNT         100
 /*---------------------------------------------------------------------------*/
 PROCESS(ble_client_process, "BLE UDP client process");
@@ -93,6 +94,7 @@ tcpip_handler(void)
           ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 1);
       }
       PRINTF("UDP packet received\n");
+      sequence_number++;
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -109,11 +111,11 @@ timeout_handler(void)
         ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 0);
     }
 
-    sprintf(buf, "%08lu", packet_counter);
+    sprintf(buf, "%08lu", sequence_number);
     memset(&buf[8], test_char, (len - 8));
     memset(&buf[len], '\0', 1);
 
-    PRINTF("sending UDP packet %lu\n", packet_counter);
+    PRINTF("sending UDP packet %lu (sequence_number: %d)\n", packet_counter, sequence_number);
     uip_udp_packet_send(conn, buf, strlen(buf));
     packet_counter++;
 }
