@@ -62,7 +62,7 @@
 #define MAX_PAYLOAD_LEN     1280
 
 #define IPV6_OVERHEAD_LEN   48
-#define TEST_PAYLOAD_LEN    80
+#define TEST_PAYLOAD_LEN    640
 static struct etimer timer;
 
 static struct uip_icmp6_echo_reply_notification router_notification;
@@ -89,10 +89,6 @@ static void
 tcpip_handler(void)
 {
   if(uip_newdata()) {
-      if(packet_counter == (PACKET_COUNT - 1)) {
-          // stop energy measurement
-          ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 1);
-      }
       PRINTF("UDP packet received\n");
       sequence_number++;
   }
@@ -106,11 +102,6 @@ timeout_handler(void)
     uint8_t test_char;
     test_char = 'X';
 
-    if(packet_counter == 0) {
-        // start energy measurement
-        ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 0);
-    }
-
     sprintf(buf, "%08lu", sequence_number);
     memset(&buf[8], test_char, (len - 8));
     memset(&buf[len], '\0', 1);
@@ -118,12 +109,16 @@ timeout_handler(void)
     PRINTF("sending UDP packet %lu (sequence_number: %d)\n", packet_counter, sequence_number);
     uip_udp_packet_send(conn, buf, strlen(buf));
     packet_counter++;
+
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(ble_client_process, ev, data)
 {
   PROCESS_BEGIN();
   printf("comparison started (%d bytes of IPv6)\n", TEST_PAYLOAD_LEN);
+
+  leds_on(LEDS_GREEN);
+  leds_on(LEDS_RED);
 
   //////////////////////////////////////////////////////////////////////////////
   // INIT
@@ -150,6 +145,8 @@ PROCESS_THREAD(ble_client_process, ev, data)
   conn = udp_new(&server_addr, UIP_HTONS(SERVER_PORT), NULL);
   udp_bind(conn, UIP_HTONS(CLIENT_PORT));
 
+
+
   //////////////////////////////////////////////////////////////////////////////
   // wait for the connection to be more stable
   PRINTF("waiting for stable connection \n");
@@ -160,8 +157,25 @@ PROCESS_THREAD(ble_client_process, ev, data)
   while(1) {
     PROCESS_YIELD();
     if((ev == PROCESS_EVENT_TIMER) && (data == &timer)) {
+
+        if(packet_counter == 0) {
+            // start energy measurement
+            //        ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 0);
+            leds_off(LEDS_GREEN);
+            leds_off(LEDS_RED);
+        }
+
       timeout_handler();
-      etimer_set(&timer, INTERVAL_SEND);
+
+      if(packet_counter == (PACKET_COUNT)) {
+          // stop energy measurement
+          ti_lib_gpio_pin_write((1 << BOARD_IOID_DP0), 1);
+          leds_on(LEDS_GREEN);
+          leds_on(LEDS_RED);
+      }
+      else {
+          etimer_set(&timer, INTERVAL_SEND);
+      }
     } else if(ev == tcpip_event) {
       tcpip_handler();
     }
