@@ -37,7 +37,8 @@ It has been tested on the TI CC2650 SensorTag and the TI CC2650 LaunchPad hardwa
 BLEach is fully compatible with the architecture of the Contiki network stack.
 It reuses the IPv6 and UDP support and maps each of its four lowest stack layers to an existing layer in Contiki's stack.
 
-![BLEach architecture](img/bleach-architecture.png)
+<img src="img/BLEach_architecture.png" height="400">
+
 
 ### BLE radio
 BLEach's radio layer, the BLE link and physical layer, directly maps into Contiki's radio layer, but provides completely different functionality. This layer decouples the radio from the upper stack layers, _prohibiting direct radio access_.
