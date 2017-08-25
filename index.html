@@ -1,0 +1,241 @@
+<!DOCTYPE HTML>
+<!--
+	Arcana by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>BLEach: an open source IPv6-over-BLE stack for constrained devices</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!--[if lte IE 8]><script src="assets/js/ie/html5shiv.js"></script><![endif]-->
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<!--[if lte IE 8]><link rel="stylesheet" href="assets/css/ie8.css" /><![endif]-->
+		<!--[if lte IE 9]><link rel="stylesheet" href="assets/css/ie9.css" /><![endif]-->
+		
+		<script>
+		  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+		  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+		  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+		  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+		  ga('create', 'UA-105196804-1', 'auto');
+		  ga('send', 'pageview');
+
+		</script>
+	</head>
+	<body>
+		<div id="page-wrapper">
+
+			<!-- Header -->
+				<div id="header">
+
+					<!-- Logo -->
+						<h1><a href="index.html" id="logo">BLEach: <em>an Open Source IPv6-over-BLE Stack for Constrained Devices</em></a></h1>
+				</div>
+
+		
+
+			<!-- Gigantic Heading -->
+				<section class="wrapper style2">
+					<div class="container">
+						<header class="major">
+							<h2>BLEach brings IPv6 over BLE to Constrained Embedded Devices</h2>
+							<!-- <p>Using BLEach, Bluetooth Low Energy (BLE) devices can connect to the Internet of Things and exchange IPv6 packets using BLE connections (IPv6 over BLE)</p> -->
+						</header>
+					</div>
+				</section>
+				
+			<!-- Highlights -->
+				<section class="wrapper style1">
+					<div class="container">
+						<div class="row 200%">
+							<section class="4u 12u(narrower)">
+								<div class="box highlight">
+									<!-- <i class="icon major fa-paper-plane"></i> -->
+									<a href="https://github.com/spoerk/contiki">
+									<i class="icon major fa-code"></i>
+									<h3>Code</h3>
+									</a>
+									<p>BLEach is based on the popular Contiki OS. Its code is licensed under the BSD License 2.0.</p>
+								</div>
+							</section>
+							<section class="4u 12u(narrower)">
+								<div class="box highlight">
+									<a href="https://github.com/spoerk/contiki/blob/master/cpu/cc26xx-cc13xx/net/README.md">
+									<i class="icon major fa-file-text-o"></i>
+									<h3>Documentation</h3>
+									</a>
+									<p>Documentation for the Contiki OS and BLEach is openly available.</p>
+								</div>
+							</section>
+							<section class="4u 12u(narrower)">
+								<div class="box highlight">
+									<a href="#">
+									<i class="icon major fa-file-pdf-o"></i>
+									<h3>Publication</h3>
+									</a>
+									<p>BLEach has been in detail discussed and evaluated in a peer-reviewed publication.</p>
+								</div>
+							</section>
+						</div>
+					</div>
+				</section>
+
+				<!-- Main -->
+				<section class="wrapper style1">
+					<div class="container">
+						<div id="content">
+
+							<!-- Content -->
+
+								<article>
+									<!-- <header> -->
+										<!-- <h2>Overview</h2> -->
+										<!-- <p>All content, all the time.</p> -->
+									<!-- </header> -->
+
+									<!-- <span class="image featured"><img src="images/banner.jpg" alt="" /></span> -->
+
+									<p>
+									Using BLEach, Bluetooth Low Energy (BLE) devices can connect to the Internet of Things and exchange IPv6 packets using BLE connections (IPv6 over BLE).
+									</p>
+									<p>
+									BLEach is a fully open source IPv6-over-BLE stack for the <a href="http://www.contiki-os.org/">Contiki OS</a>.
+									The stack implements full support for IPv6 over BLE according to the <a href="https://tools.ietf.org/html/rfc7668">RFC 7668</a> standard
+									and supports IPv6-over-BLE node and IPv6-over-BLE router devices.
+									BLEach is interoperable with other RFC-7668-compliant devices and is able to exchange IPv6 packets with a maximum packet length of 1280 bytes.
+									Because BLEach is fully open source, each of its modules can be optimized or extended to support a wide range of applications and hardware platforms.
+									</p>
+									
+									<p>
+									BLEach is presended and evaluated in detail in the publication:<br/>
+									Michael Spörk, Carlo Alberto Boano, Marco Zimmerling, and Kay Römer.
+									<a href="http://sensys.acm.org/2017/">BLEach: Exploiting the Full Potential of IPv6 over BLE in Constrained Embedded IoT Devices</a>.
+									<em>In Proceedings of the 15th ACM Conference on Embedded Networked Sensor Systems (SenSys)</em>, Delft (The Netherlands), November 2017.
+									<a href="http://sensys.acm.org/2017/">[Link]</a> <a href="http://sensys.acm.org/2017/">[Paper]</a>
+									</p>
+
+									<h3>Features</h3>
+									<p>
+									BLEach provides full support for both IPv6-over-BLE nodes and border routers according to the <a href="https://tools.ietf.org/html/rfc7668">RFC 7668</a>.
+									Currently, BLEach supports the <a href="http://www.ti.com/tool/cc2650stk">Texas Instruments CC2650</a> hardware platform.
+									</p>
+									
+									<p>									
+									BLEach implements the BLE link layer functionality <em>BLE advertisement</em>, <em>BLE initiating</em>, <em>BLE connection slave</em>, and <em>BLE connection master</em>
+									according to the <a href="https://www.bluetooth.com/specifications/bluetooth-core-specification/legacy-specifications">Bluetooth Specification v4.1</a>.
+									It implements the <em>LE credit-based flow control</em> mode of BLE's L2CAP layer and is able to exchange IPv6 packets with a length of up to 1280 bytes.
+									When acting as a IPv6-over-BLE node, BLEach is able to connect to a single border router to communicate.
+									A IPv6-over-BLE border router using BLEach can connect to up to 4 different node devices and exchange IPv6 packets.
+									</p>
+									
+									<h3>Architecture</h3>
+									<p>
+									BlEach is fully compatible with the architecture of the Contiki OS and its network stack.
+									It reuses the IPv6 and UDP support of Contiki and maps each of its four lowest stack layers to an existing layer in Contiki's stack.
+									</p>
+									<span class="image"><img src="img/BLEach_architecture.png" width="600" /></span>
+									
+									<h4>BLE link and PHY layer</h4>
+									<p>
+									BLEach’s radio layer, the BLE link and PHY layer, directly maps into Contiki’s radio layer, but provides completely different functionality.
+									This layer decouples the radio from the upper stack layers, <em>prohibiting direct radio access</em>.
+									These files contain all the hardware specific code for supporting BLE.
+									</p>
+									
+									<h4>Parametrization layer</h4>
+									<p>
+									The parametrization layer maps into Contiki’s radio duty cycling (RDC) layer.
+									Since directly turning the radio on and off is not possible, this layer <em>indirectly</em> changes the radio duty cycle by changing the BLE connection parameters.
+									</p>
+									
+									<h4>L2CAP layer</h4>
+									<p>
+									BLEach’S L2CAP layer directly maps into Contiki’s medium access control (MAC) layer.
+									This layer provides support for fragmentation of large IPv6 packets and flow control. 
+									</p>
+									
+									
+									<h3>Using BLEach</h3>
+									The <a href="https://github.com/spoerk/contiki/blob/master/cpu/cc26xx-cc13xx/net/README.md">documentation</a> of BLEach provides information on how to use and configure BLEach.
+									In addition to the documentation, a simple IPv6-over-BLE client and server example are included in the <a href="https://github.com/spoerk/contiki">repository</a> of BLEach.
+								</article>
+
+						</div>
+					</div>
+				</section>
+				
+
+			<!-- CTA -->
+				<section id="cta" class="wrapper style3">
+					<div class="container">
+						<header>
+							<h2>The code of BLEach is fully open source:</h2>
+							<a href="https://github.com/spoerk/contiki/tree/master/cpu/cc26xx-cc13xx/net" class="button">Take a look</a>
+						</header>
+					</div>
+				</section>
+
+			<!-- Footer -->
+				<div id="footer">
+					<!-- <div class="container"> -->
+						<!-- <div class="row"> -->
+							<!-- <section class="3u 6u(narrower) 12u$(mobilep)"> -->
+								<!-- <h3>Links to Stuff</h3> -->
+								<!-- <ul class="links"> -->
+									<!-- <li><a href="#">Mattis et quis rutrum</a></li> -->
+									<!-- <li><a href="#">Suspendisse amet varius</a></li> -->
+									<!-- <li><a href="#">Sed et dapibus quis</a></li> -->
+									<!-- <li><a href="#">Rutrum accumsan dolor</a></li> -->
+									<!-- <li><a href="#">Mattis rutrum accumsan</a></li> -->
+									<!-- <li><a href="#">Suspendisse varius nibh</a></li> -->
+									<!-- <li><a href="#">Sed et dapibus mattis</a></li> -->
+								<!-- </ul> -->
+							<!-- </section> -->
+							<!-- <section class="3u 6u$(narrower) 12u$(mobilep)"> -->
+								<!-- <h3>More Links to Stuff</h3> -->
+								<!-- <ul class="links"> -->
+									<!-- <li><a href="#">Duis neque nisi dapibus</a></li> -->
+									<!-- <li><a href="#">Sed et dapibus quis</a></li> -->
+									<!-- <li><a href="#">Rutrum accumsan sed</a></li> -->
+									<!-- <li><a href="#">Mattis et sed accumsan</a></li> -->
+									<!-- <li><a href="#">Duis neque nisi sed</a></li> -->
+									<!-- <li><a href="#">Sed et dapibus quis</a></li> -->
+									<!-- <li><a href="#">Rutrum amet varius</a></li> -->
+								<!-- </ul> -->
+							<!-- </section> -->
+						<!-- </div> -->
+					<!-- </div> -->
+
+					<!-- Icons -->
+						<ul class="icons">
+							<!-- <li><a href="#" class="icon fa-twitter"><span class="label">Twitter</span></a></li> -->
+							<!-- <li><a href="#" class="icon fa-facebook"><span class="label">Facebook</span></a></li> -->
+							<li><a href="https://github.com/spoerk" class="icon fa-github"><span class="label">GitHub</span></a></li>
+							<li><a href="https://www.linkedin.com/in/michael-spoerk/" class="icon fa-linkedin"><span class="label">LinkedIn</span></a></li>
+							<!-- <li><a href="#" class="icon fa-google-plus"><span class="label">Google+</span></a></li> -->
+						</ul>
+
+					<!-- Copyright -->
+						<div class="copyright">
+							<ul class="menu">
+								<li>&copy; 2017 Graz University of Technology - Austria. All rights reserved</li><li>Design: <a href="http://html5up.net">HTML5 UP</a></li>
+							</ul>
+						</div>
+
+				</div>
+
+		</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/jquery.dropotron.min.js"></script>
+			<script src="assets/js/skel.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<!--[if lte IE 8]><script src="assets/js/ie/respond.min.js"></script><![endif]-->
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>
