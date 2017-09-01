@@ -2038,6 +2038,15 @@
 				display: block;
 				width: 100%;
 			}
+			
+		.image.center {
+			display: block;
+			width: 100%;
+		}
+			.image.center img {
+				display: block;
+				width: 50%;
+			}
 
 		.image.featured {
 			display: block;
