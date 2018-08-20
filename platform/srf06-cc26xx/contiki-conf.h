@@ -336,7 +336,7 @@
  * @{
  */
 #ifndef ROM_BOOTLOADER_ENABLE
-#define ROM_BOOTLOADER_ENABLE              0
+#define ROM_BOOTLOADER_ENABLE              1
 #endif
 /** @} */
 /*---------------------------------------------------------------------------*/
